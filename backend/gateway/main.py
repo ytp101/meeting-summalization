@@ -8,7 +8,7 @@ app = FastAPI()
 
 @app.get("/")
 def running():
-    return {"Server is running"}
+    return {"gateway service is running"}
 
 @app.post("/uploadfile/")
 def create_upload_file(file: UploadFile):
@@ -24,4 +24,4 @@ def create_upload_file(file: UploadFile):
     return {"message": f"Successfully uploaded {file.filename}, filepath: {file_path}"}
 
 if __name__ == "__main__":
-    uvicorn.run(app)
+    uvicorn.run(app, port=8000)
