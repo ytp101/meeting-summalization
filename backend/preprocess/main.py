@@ -40,7 +40,7 @@ async def preprocess(filepath: FilePath):
         stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await process.communicate()
-    
+    # TODO: add logging 
     if process.returncode != 0: 
         error_msg = stderr.decode().strip()
         raise HTTPException(status_code=500, detail="FFmpeg processing failed")
