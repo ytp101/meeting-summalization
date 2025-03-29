@@ -10,9 +10,6 @@ class FilePath(BaseModel):
 
 BASE_DIR_TXT = "/home/user/meeting-summalization/database/txt/"
 MODEL_ID = "llama3"
-PROMPT = """
-
-"""
 
 app = FastAPI()
 
