@@ -3,6 +3,8 @@ import uvicorn
 import os  
 from pydantic import BaseModel 
 import asyncio
+from fastapi.responses import JSONResponse 
+from fastapi.encoders import jsonable_encoder
 
 class FilePath(BaseModel):
     filename: str 
@@ -44,8 +46,15 @@ async def preprocess(filepath: FilePath):
     if process.returncode != 0: 
         error_msg = stderr.decode().strip()
         raise HTTPException(status_code=500, detail="FFmpeg processing failed")
+    
+    preprocess_file_path = os.path.join(input_file_name_request)
+    filepath_dict = [
+        {
+            "preprocessd_file_path": str(preprocess_file_path)
+        }
+    ]
 
-    return {"message": f"Sucessful Process {input_file_name} to {output_file_name} with {command}"}
+    return JSONResponse(content=jsonable_encoder(filepath_dict))
 
 
 if __name__ == "__main__":

@@ -1,8 +1,15 @@
 from fastapi import FastAPI, UploadFile, HTTPException
 import uvicorn
 import os  
+import httpx
+from pathlib import Path 
 
 BASE_DIR = "/home/user/meeting-summalization/database/mp4/"
+
+# Service Endpoint 
+PREPROCESS_ENDPOINT = "http://127.0.0.1:8001/preprocess/"
+WHISPER_ENDPOINT = "http://127.0.0.1:8002"
+SUMMLIZATION_ENDPOINT = "http://127.0.0.1:8003"
 
 app = FastAPI() 
 
@@ -11,18 +18,29 @@ def running():
     return {"gateway service is running"}
 
 @app.post("/uploadfile/")
-def create_upload_file(file: UploadFile):
+async def create_upload_file(file: UploadFile):
     # step 1: gateway accept user uploaded file
     try: 
-        contents = file.file.read()
+        contents = await file.read()
         file_path = os.path.join(BASE_DIR, file.filename)
-        with open(file_path, "wb") as f:
-            f.write(contents)
+        file_name = str(Path(file_path).stem)
+        with open(file_path, "wb") as file_upload:
+            file_upload.write(contents)
     except Exception: 
-        raise HTTPException(status_code=500, detail="Something is wrong")
-    finally:
-        file.file.close()
+        raise HTTPException(status_code=500, detail="gateway failed to save file")
+
     # step 2: gateway send file path to preprocess file 
+    try:
+        async with httpx.AsyncClient() as client: 
+            preprocesss_response = await client.post(
+                PREPROCESS_ENDPOINT,
+                json={"filename": file_name},
+                timeout=120
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"preprocess failed: {str(e)}")
+    
+    preprocessed_file_path = preprocesss_response.json()[0]['preprocessd_file_path']
 
     # step 3: preprocess send file path (preprocessed back to gateway)
 
