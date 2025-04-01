@@ -17,7 +17,7 @@ app = FastAPI()
 def running():
     return {"message": "summalization service is running"}
 
-@app.post("/summlization")
+@app.post("/summlization/")
 async def summlization(filepath: FilePath):
     try:
         input_file_name_request = filepath.filename
