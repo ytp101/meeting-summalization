@@ -8,8 +8,8 @@ BASE_DIR = "/home/user/meeting-summalization/database/mp4/"
 
 # Service Endpoint 
 PREPROCESS_ENDPOINT = "http://127.0.0.1:8001/preprocess/"
-WHISPER_ENDPOINT = "http://127.0.0.1:8002"
-SUMMLIZATION_ENDPOINT = "http://127.0.0.1:8003"
+WHISPER_ENDPOINT = "http://127.0.0.1:8002/whisper/"
+SUMMLIZATION_ENDPOINT = "http://127.0.0.1:8003/summlization/"
 
 app = FastAPI() 
 
@@ -40,13 +40,23 @@ async def create_upload_file(file: UploadFile):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"preprocess failed: {str(e)}")
     
+    # step 3: preprocess send file path (preprocessed back to gateway)
     preprocessed_file_path = preprocesss_response.json()[0]['preprocessd_file_path']
 
-    # step 3: preprocess send file path (preprocessed back to gateway)
-
     # step 4: gateway send file path (preprocessed to whisper)
+    try:
+        async with httpx.AsyncClient() as client: 
+            trancription_response = await client.post(
+                WHISPER_ENDPOINT,
+                json={"filename": preprocessed_file_path},
+                timeout=60*20
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"whisper failed: {str(e)}")
 
     # step 5: whisper send file path (transciption) back to gateway 
+    trancription_file_path = trancription_response.json()[0]['trancription_file_path']
+    print("Trancription File Path: ", trancription_file_path)
 
     # step 6: gateway send file path (transcription) to summlization 
 
