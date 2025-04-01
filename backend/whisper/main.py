@@ -4,6 +4,8 @@ import uvicorn
 import os 
 from transformers import pipeline
 from pydantic import BaseModel 
+from fastapi.responses import JSONResponse 
+from fastapi.encoders import jsonable_encoder
 
 class FilePath(BaseModel):
     filename: str 
@@ -32,7 +34,8 @@ def running():
 @app.post("/whisper/")
 async def transcribe(filepath: FilePath):
     try:
-        input_file_name_request = filepath.filename
+        result = filepath.model_dump()  
+        input_file_name_request = result['filename']
     except Exception:
         print(Exception)
         raise HTTPException(status_code=500, detail="Something is wrong")
@@ -44,8 +47,15 @@ async def transcribe(filepath: FilePath):
 
     with open(output_file_name, "w") as file_output:
         file_output.write(transcription['text'])
-    
-    return {"message": f"Successsful transcribe {input_file_name} to {output_file_name} with {model_id}"}
+
+    output_file_name = os.path.join(input_file_name_request)
+    filepath_dict = [
+        {
+            "trancription_file_path": str(output_file_name)
+        }
+    ]
+
+    return JSONResponse(content=jsonable_encoder(filepath_dict))
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8002)
