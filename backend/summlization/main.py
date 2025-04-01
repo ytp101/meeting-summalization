@@ -4,6 +4,8 @@ import os
 from pydantic import BaseModel
 from ollama import chat 
 from ollama import ChatResponse 
+from fastapi.responses import JSONResponse 
+from fastapi.encoders import jsonable_encoder 
 
 class FilePath(BaseModel):
     filename: str 
@@ -20,7 +22,8 @@ def running():
 @app.post("/summlization/")
 async def summlization(filepath: FilePath):
     try:
-        input_file_name_request = filepath.filename
+        result = filepath.model_dump()
+        input_file_name_request = result['filename']
     except Exception:
         print(Exception)
         raise HTTPException(status_code=500, detail="Something is wrong")
@@ -42,7 +45,13 @@ async def summlization(filepath: FilePath):
     with open(output_file_name, "w") as file_output:
         file_output.write(response["message"]["content"])
     
-    return {"message": f"Successful summalization {input_file_name} with {MODEL_ID} saved to {output_file_name}"}
+    filepath_dict = [
+        {
+            "summalization_file_path": str(os.path.join(input_file_name_request + "_summalized")),
+        }
+    ]
+
+    return JSONResponse(content=jsonable_encoder(filepath_dict))
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8003)

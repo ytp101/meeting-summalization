@@ -56,13 +56,23 @@ async def create_upload_file(file: UploadFile):
 
     # step 5: whisper send file path (transciption) back to gateway 
     trancription_file_path = trancription_response.json()[0]['trancription_file_path']
-    print("Trancription File Path: ", trancription_file_path)
 
     # step 6: gateway send file path (transcription) to summlization 
+    try:
+        async with httpx.AsyncClient() as client: 
+            summalization_response = await client.post(
+                SUMMLIZATION_ENDPOINT,
+                json={"filename": trancription_file_path},
+                timeout=60*20
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"summlization failed: {str(e)}")
 
-    # step 7: summalization send file path (summlizaed) to gateway 
+    # step 7: summalization send file path (summlized) to gateway 
+    summlization_file_path = summalization_response.json()[0]['summalization_file_path']
 
     # step 8: return summalized back to user 
+    return str(summlization_file_path)
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8000)
