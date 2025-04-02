@@ -28,7 +28,7 @@ def running():
 
 @app.post("/preprocess/")
 async def preprocess(filepath: FilePath):
-    logging.info("try to recevied file")
+    logging.info("try to recevied filepath")
     try: 
         result = filepath.model_dump()  
         input_file_name_request = result['filename']
@@ -73,6 +73,8 @@ async def preprocess(filepath: FilePath):
             "preprocessd_file_path": str(preprocess_file_path)
         }
     ]
+
+    logging.info(f"sending file path back to gateway with: {preprocess_file_path}")
 
     return JSONResponse(content=jsonable_encoder(filepath_dict))
 
