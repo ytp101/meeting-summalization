@@ -71,14 +71,12 @@ python /backend/summalization/main.py
 You can call them in order via API Gateway or manually.
 
 ## 🔐 API Reference
-| ------------- | ------------- | ------------------------------------- |
 | Endpoint      | Method        | Description                           |
 | ------------- | ------------- | ------------------------------------- |
 | /gateway/     | POST          | Received mp4 or mp3 from user         |
 | /preprocess/  | POST          | Extract .wav from video               |
 | /whisper/     | POST          | Transcribe audio using Whisper        |
 | /summarize/   | POST          | Generate text summary from transcript |
-| ------------- | ------------- | ------------------------------------- |
 
 ## 🗃 Database
 No persistent database yet — results are stored as .wav, .txt, and .json in the database/ folder.
