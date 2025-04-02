@@ -5,6 +5,14 @@ from pydantic import BaseModel
 import asyncio
 from fastapi.responses import JSONResponse 
 from fastapi.encoders import jsonable_encoder
+import logging 
+
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+logging.info("preprocess is setup and running")
 
 class FilePath(BaseModel):
     filename: str 
@@ -20,15 +28,17 @@ def running():
 
 @app.post("/preprocess/")
 async def preprocess(filepath: FilePath):
+    logging.info("try to recevied filepath")
     try: 
         result = filepath.model_dump()  
         input_file_name_request = result['filename']
-    except Exception: 
+        logger.info(f"got file name: {input_file_name_request}")
+    except Exception as e: 
+        logger.error(f"failed to recevied file: {e}")
         raise HTTPException(status_code=500, detail="Something is wrong")
     
     input_file_name = os.path.join(BASE_DIR_MP4, input_file_name_request + ".mp4")
     output_file_name = os.path.join(BASE_DIR_WAV, input_file_name_request + ".wav")
-    # TODO: make service/gateway/main.py to send file path (filename: "test_video")
 
     command = [
         "ffmpeg", "-i", str(input_file_name),
@@ -36,15 +46,25 @@ async def preprocess(filepath: FilePath):
         "-c:a", "pcm_s16le", "-af", "loudnorm", str(output_file_name)
     ]
 
+    logger.info(f"preprocessing {input_file_name} with {command} save to {output_file_name}")
+    
     process = await asyncio.create_subprocess_exec(
         *command, 
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
-    stdout, stderr = await process.communicate()
-    # TODO: add logging 
+    
+    assert process.stderr is not None 
+    while True: 
+        line = await process.stderr.readline()
+        if not line: 
+            break 
+        logger.info(line.decode().strip())
+    
+    await process.wait()
+
     if process.returncode != 0: 
-        error_msg = stderr.decode().strip()
+        logger.error("ffmpeg processing failed")
         raise HTTPException(status_code=500, detail="FFmpeg processing failed")
     
     preprocess_file_path = os.path.join(input_file_name_request)
@@ -53,6 +73,8 @@ async def preprocess(filepath: FilePath):
             "preprocessd_file_path": str(preprocess_file_path)
         }
     ]
+
+    logging.info(f"sending file path back to gateway with: {preprocess_file_path}")
 
     return JSONResponse(content=jsonable_encoder(filepath_dict))
 
