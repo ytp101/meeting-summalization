@@ -16,8 +16,9 @@ logging.info("preprocess is setup and running")
 
 class FilePath(BaseModel):
     filename: str 
+    ext: str
 
-BASE_DIR_MP4 = "/home/user/meeting-summalization/database/mp4/"
+BASE_DIR = "/home/user/meeting-summalization/database/input/"
 BASE_DIR_WAV = "/home/user/meeting-summalization/database/wav/"
 
 app = FastAPI() 
@@ -32,12 +33,13 @@ async def preprocess(filepath: FilePath):
     try: 
         result = filepath.model_dump()  
         input_file_name_request = result['filename']
-        logger.info(f"got file name: {input_file_name_request}")
+        ext = str(result["ext"])
+        logger.info(f"got file name: {input_file_name_request} with ext: {ext}")
     except Exception as e: 
         logger.error(f"failed to recevied file: {e}")
         raise HTTPException(status_code=500, detail="Something is wrong")
     
-    input_file_name = os.path.join(BASE_DIR_MP4, input_file_name_request + ".mp4")
+    input_file_name = os.path.join(BASE_DIR, input_file_name_request + ext)
     output_file_name = os.path.join(BASE_DIR_WAV, input_file_name_request + ".wav")
 
     command = [
