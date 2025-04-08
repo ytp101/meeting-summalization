@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 logging.info("gateway is set up and running")
 
 # base dir of path to save file to 
-BASE_DIR = "/home/user/meeting-summalization/database/mp4/"
+BASE_DIR = "/home/user/meeting-summalization/database/input/"
 
 # Service Endpoint 
 PREPROCESS_ENDPOINT = "http://127.0.0.1:8001/preprocess/"
@@ -35,6 +35,7 @@ async def create_upload_file(file: UploadFile):
     try: 
         contents = await file.read()
         file_path = os.path.join(BASE_DIR, file.filename)
+        file_name, file_extension = os.path.splitext(file_path)
         file_name = str(Path(file_path).stem)
         with open(file_path, "wb") as file_upload:
             file_upload.write(contents)
@@ -44,61 +45,64 @@ async def create_upload_file(file: UploadFile):
         raise HTTPException(status_code=500, detail="gateway failed to save file")
     
     # step 2: gateway send file path to preprocess file 
-    logger.info(f"sending files: {file_name} to preprocess service")
+    logger.info(f"sending files: {file_name} to preprocess service with ext: {file_extension}")
 
     try:
         async with httpx.AsyncClient() as client: 
             preprocesss_response = await client.post(
                 PREPROCESS_ENDPOINT,
-                json={"filename": file_name},
+                json={
+                    "filename": file_name,
+                    "ext": file_extension
+                },
                 timeout=120
             )
         logger.info("preprocessing completed")
     except Exception as e:
         logger.error(f"preprocessing failed: {e}")
         raise HTTPException(status_code=500, detail=f"preprocess failed: {str(e)}")
-    
-    # step 3: preprocess send file path (preprocessed back to gateway)
-    preprocessed_file_path = preprocesss_response.json()[0]['preprocessd_file_path']
+    return preprocesss_response
+    # # step 3: preprocess send file path (preprocessed back to gateway)
+    # preprocessed_file_path = preprocesss_response.json()[0]['preprocessd_file_path']
 
-    # step 4: gateway send file path (preprocessed to whisper)
-    logger.info(f"sending files: {preprocessed_file_path} to whisper service")
+    # # step 4: gateway send file path (preprocessed to whisper)
+    # logger.info(f"sending files: {preprocessed_file_path} to whisper service")
 
-    try:
-        async with httpx.AsyncClient() as client: 
-            trancription_response = await client.post(
-                WHISPER_ENDPOINT,
-                json={"filename": preprocessed_file_path},
-                timeout=60*20
-            )
-        logger.info("transcription completed")
-    except Exception as e:
-        logger.error(f"whisper failed: {e}")
-        raise HTTPException(status_code=500, detail=f"whisper failed: {str(e)}")
+    # try:
+    #     async with httpx.AsyncClient() as client: 
+    #         trancription_response = await client.post(
+    #             WHISPER_ENDPOINT,
+    #             json={"filename": preprocessed_file_path},
+    #             timeout=60*20
+    #         )
+    #     logger.info("transcription completed")
+    # except Exception as e:
+    #     logger.error(f"whisper failed: {e}")
+    #     raise HTTPException(status_code=500, detail=f"whisper failed: {str(e)}")
 
-    # step 5: whisper send file path (transciption) back to gateway 
-    trancription_file_path = trancription_response.json()[0]['trancription_file_path']
+    # # step 5: whisper send file path (transciption) back to gateway 
+    # trancription_file_path = trancription_response.json()[0]['trancription_file_path']
 
-    # step 6: gateway send file path (transcription) to summlization 
-    logger.info(f"sending files: {trancription_file_path} to summalization service")
+    # # step 6: gateway send file path (transcription) to summlization 
+    # logger.info(f"sending files: {trancription_file_path} to summalization service")
 
-    try:
-        async with httpx.AsyncClient() as client: 
-            summalization_response = await client.post(
-                SUMMLIZATION_ENDPOINT,
-                json={"filename": trancription_file_path},
-                timeout=60*20
-            )
-    except Exception as e:
-        logger.error(f"summalization failed: {e}")
-        raise HTTPException(status_code=500, detail=f"summlization failed: {str(e)}")
+    # try:
+    #     async with httpx.AsyncClient() as client: 
+    #         summalization_response = await client.post(
+    #             SUMMLIZATION_ENDPOINT,
+    #             json={"filename": trancription_file_path},
+    #             timeout=60*20
+    #         )
+    # except Exception as e:
+    #     logger.error(f"summalization failed: {e}")
+    #     raise HTTPException(status_code=500, detail=f"summlization failed: {str(e)}")
 
-    # step 7: summalization send file path (summlized) to gateway 
-    summlization_file_path = summalization_response.json()[0]['summalization_file_path']
-    logger.info(f"sending back: {summlization_file_path} to user")
+    # # step 7: summalization send file path (summlized) to gateway 
+    # summlization_file_path = summalization_response.json()[0]['summalization_file_path']
+    # logger.info(f"sending back: {summlization_file_path} to user")
 
-    # step 8: return summalized back to user 
-    return str(summlization_file_path)
+    # # step 8: return summalized back to user 
+    # return str(summlization_file_path)
 
 if __name__ == "__main__":
     uvicorn.run(app, port=8000, log_level="debug")
