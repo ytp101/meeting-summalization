@@ -1,83 +1,159 @@
 from fastapi import FastAPI, HTTPException
 import uvicorn
-import os  
-from pydantic import BaseModel 
+import os
 import asyncio
-from fastapi.responses import JSONResponse 
+from pydantic import BaseModel
+from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-import logging 
+import logging
+from pathlib import Path
+import shutil
 
+# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    filename=os.getenv('LOG_FILE', 'preprocess.log')
 )
 logger = logging.getLogger(__name__)
-logging.info("preprocess is setup and running")
+logger.info("Preprocess service is starting up")
 
 class FilePath(BaseModel):
-    filename: str 
+    filename: str
 
-BASE_DIR_MP4 = "/home/user/meeting-summalization/database/mp4/"
-BASE_DIR_WAV = "/home/user/meeting-summalization/database/wav/"
+# Environment variables with defaults
+BASE_DIR_MP4 = os.getenv('BASE_DIR_MP4', '/usr/local/app/data/mp4/')
+BASE_DIR_WAV = os.getenv('BASE_DIR_WAV', '/usr/local/app/data/wav/')
+FFMPEG_TIMEOUT = int(os.getenv('FFMPEG_TIMEOUT', 600))  # 10 minutes default
 
-app = FastAPI() 
+# Create directories if they don't exist
+os.makedirs(BASE_DIR_MP4, exist_ok=True)
+os.makedirs(BASE_DIR_WAV, exist_ok=True)
+
+# Check if ffmpeg is available
+try:
+    ffmpeg_version = asyncio.run(asyncio.create_subprocess_exec(
+        "ffmpeg", "-version",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    ))
+    logger.info("FFmpeg is available")
+except Exception as e:
+    logger.error(f"FFmpeg is not available: {e}")
+    # We'll continue but log the error
+
+app = FastAPI(title="Meeting Audio Preprocessor")
 
 @app.get("/")
 def running():
-    return {"preprocess service is running"}
+    return {"status": "Preprocess service is running"}
+
+@app.get("/healthcheck")
+async def healthcheck():
+    """Check if service dependencies are available"""
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await process.wait()
+        if process.returncode == 0:
+            return {"status": "healthy", "ffmpeg": "available"}
+        else:
+            return {"status": "degraded", "ffmpeg": "error"}
+    except Exception as e:
+        return {"status": "unhealthy", "ffmpeg": "unavailable", "error": str(e)}
 
 @app.post("/preprocess/")
 async def preprocess(filepath: FilePath):
-    logging.info("try to recevied filepath")
-    try: 
-        result = filepath.model_dump()  
+    """Convert MP4 video to WAV audio format optimized for transcription"""
+    logger.info("Received file path request")
+    
+    try:
+        result = filepath.model_dump()
         input_file_name_request = result['filename']
-        logger.info(f"got file name: {input_file_name_request}")
-    except Exception as e: 
-        logger.error(f"failed to recevied file: {e}")
-        raise HTTPException(status_code=500, detail="Something is wrong")
+        logger.info(f"Processing file: {input_file_name_request}")
+    except Exception as e:
+        logger.error(f"Failed to process request: {e}")
+        raise HTTPException(status_code=400, detail="Invalid request format")
     
-    input_file_name = os.path.join(BASE_DIR_MP4, input_file_name_request + ".mp4")
-    output_file_name = os.path.join(BASE_DIR_WAV, input_file_name_request + ".wav")
-
+    input_file = Path(BASE_DIR_MP4) / f"{input_file_name_request}.mp4"
+    output_file = Path(BASE_DIR_WAV) / f"{input_file_name_request}.wav"
+    
+    # Check if input file exists
+    if not input_file.exists():
+        logger.error(f"Input file not found: {input_file}")
+        raise HTTPException(status_code=404, detail="Input file not found")
+    
+    # Ensure output directory exists
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Prepare ffmpeg command
     command = [
-        "ffmpeg", "-i", str(input_file_name),
-        "-vn", "-ar", "16000", "-ac", "1",
-        "-c:a", "pcm_s16le", "-af", "loudnorm", str(output_file_name)
+        "ffmpeg", "-i", str(input_file),
+        "-vn",                  # Disable video
+        "-ar", "16000",         # Sample rate: 16kHz
+        "-ac", "1",             # Mono channel
+        "-c:a", "pcm_s16le",    # 16-bit PCM
+        "-af", "loudnorm",      # Normalize audio volume
+        str(output_file)
     ]
-
-    logger.info(f"preprocessing {input_file_name} with {command} save to {output_file_name}")
     
-    process = await asyncio.create_subprocess_exec(
-        *command, 
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
+    logger.info(f"Running command: {' '.join(command)}")
     
-    assert process.stderr is not None 
-    while True: 
-        line = await process.stderr.readline()
-        if not line: 
-            break 
-        logger.info(line.decode().strip())
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        
+        # Create timeout task
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT)
+            
+            # Log any error output
+            if stderr:
+                for line in stderr.decode().splitlines():
+                    if line.strip():
+                        logger.info(f"FFmpeg: {line.strip()}")
+            
+            if process.returncode != 0:
+                logger.error(f"FFmpeg processing failed with code {process.returncode}")
+                raise HTTPException(
+                    status_code=500, 
+                    detail=f"FFmpeg failed: {stderr.decode() if stderr else 'Unknown error'}"
+                )
+                
+        except asyncio.TimeoutError:
+            # Kill the process if it times out
+            try:
+                process.kill()
+            except Exception:
+                pass
+            logger.error(f"FFmpeg process timed out after {FFMPEG_TIMEOUT} seconds")
+            raise HTTPException(status_code=504, detail=f"FFmpeg process timed out")
     
-    await process.wait()
-
-    if process.returncode != 0: 
-        logger.error("ffmpeg processing failed")
-        raise HTTPException(status_code=500, detail="FFmpeg processing failed")
+    except Exception as e:
+        logger.error(f"Error during audio conversion: {e}")
+        raise HTTPException(status_code=500, detail=f"Audio conversion failed: {str(e)}")
     
-    preprocess_file_path = os.path.join(input_file_name_request)
+    # Check if output file was created
+    if not output_file.exists():
+        logger.error("Output file was not created")
+        raise HTTPException(status_code=500, detail="Output file was not created")
+    
+    # Return file path without extension
     filepath_dict = [
         {
-            "preprocessd_file_path": str(preprocess_file_path)
+            "preprocessd_file_path": input_file_name_request
         }
     ]
-
-    logging.info(f"sending file path back to gateway with: {preprocess_file_path}")
-
+    
+    logger.info(f"Preprocessing complete. Output: {output_file}")
     return JSONResponse(content=jsonable_encoder(filepath_dict))
 
-
 if __name__ == "__main__":
-    uvicorn.run(app, port=8001)
+    port = int(os.getenv("PORT", 8001))
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
