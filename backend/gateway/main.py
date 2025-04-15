@@ -13,7 +13,7 @@ from pydantic import BaseModel
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
-    filename=os.getenv('LOG_FILE', 'gateway.log')
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 logger.info("Gateway service is starting up")
@@ -172,15 +172,26 @@ async def create_upload_file(file: UploadFile = File(...)):
         logger.error(f"Invalid summarization response format: {e}")
         raise HTTPException(status_code=500, detail="Invalid response from summarization service")
     
-    logger.info(f"Sending back: {summarization_file_path} to user")
+    logger.info(f"Reading summary file: {summarization_file_path}")
     
     # Calculate processing time
     elapsed_time = time.time() - start_time
     logger.info(f"Total processing time: {elapsed_time:.2f} seconds")
     
-    # Step 8: Return result to user
+    # Step 8: Read the summary file content
+    try:
+        summary_file = Path('/usr/local/app/data/txt/') / f"{summarization_file_path}.txt"
+        with open(summary_file, "r", encoding="utf-8") as f:
+            summary_content = f.read()
+        logger.info(f"Successfully read summary content ({len(summary_content)} characters)")
+    except Exception as e:
+        logger.error(f"Failed to read summary file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to read summary file: {str(e)}")
+    
+    # Step 9: Return result to user
     return {
         "filename": str(summarization_file_path),
+        "summary": summary_content,
         "processing_time_seconds": round(elapsed_time, 2)
     }
 

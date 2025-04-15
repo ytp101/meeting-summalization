@@ -13,8 +13,12 @@ RUN apt-get update && \
 # Setup app user and directories
 RUN useradd app && \
     mkdir -p /usr/local/app/data/txt && \
-    touch /usr/local/app/summarization.log && \
+    mkdir -p /usr/local/app/logs && \
+    touch /usr/local/app/logs/summarization.log && \
+    chmod 666 /usr/local/app/logs/summarization.log && \
     chown -R app:app /usr/local/app
+RUN mkdir -p /usr/local/app/data/txt && \
+    chmod 777 /usr/local/app/data/txt
 
 # Install Python dependencies
 COPY requirements.txt ./
@@ -32,7 +36,8 @@ ENV BASE_DIR_TXT=/usr/local/app/data/txt/ \
     MAX_TOKENS=4096 \
     TEMPERATURE=0.2 \
     REQUEST_TIMEOUT=300 \
-    PORT=8003
+    PORT=8003 \
+    LOG_FILE=/usr/local/app/logs/summarization.log
 
 # Switch to non-root user
 USER app

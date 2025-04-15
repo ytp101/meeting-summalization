@@ -9,7 +9,6 @@ services:
       - "8000:8000"
     volumes:
       - shared_data:/usr/local/app/data
-      - gateway_logs:/usr/local/app/
     environment:
       - PREPROCESS_SERVICE_URL=http://preprocess:8001/preprocess/
       - WHISPER_SERVICE_URL=http://whisper:8002/whisper/
@@ -29,7 +28,6 @@ services:
       dockerfile: Dockerfile
     volumes:
       - shared_data:/usr/local/app/data
-      - preprocess_logs:/usr/local/app/
     environment:
       - TZ=Asia/Bangkok
     restart: unless-stopped
@@ -42,37 +40,37 @@ services:
       dockerfile: Dockerfile
     volumes:
       - shared_data:/usr/local/app/data
-      - whisper_logs:/usr/local/app/
       - whisper_cache:/home/app/.cache
-    environment:
-      - TZ=Asia/Bangkok
-      - MODEL_ID=openai/whisper-large-v3-turbo
-      - LANGUAGE=th
-    # GPU Support (uncomment if NVIDIA Container Toolkit is installed)
+    # runtime: nvidia
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: all
               capabilities: [gpu]
+    environment:
+      - TZ=Asia/Bangkok
+      - MODEL_ID=openai/whisper-large-v3-turbo
+      - LANGUAGE=th
+      - NVIDIA_VISIBLE_DEVICES=all
     restart: unless-stopped
     networks:
       - meeting_network
 
   summarization:
     build:
-      context: ./summarization
+      context: ./summlization
       dockerfile: Dockerfile
     volumes:
       - shared_data:/usr/local/app/data
-      - summarization_logs:/usr/local/app/
     environment:
       - TZ=Asia/Bangkok
       - MODEL_ID=llama3
       - OLLAMA_HOST=http://ollama:11434
       - MAX_TOKENS=4096
       - TEMPERATURE=0.2
+      - REQUEST_TIMEOUT=600
     depends_on:
       - ollama
     restart: unless-stopped
@@ -84,17 +82,20 @@ services:
     volumes:
       - ollama_data:/root/.ollama
     ports:
-      - "11434:11434"
-    networks:
-      - meeting_network
-    # GPU Support (uncomment if NVIDIA Container Toolkit is installed)
+      - "11435:11434"
+    # runtime: nvidia
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: all
               capabilities: [gpu]
+    environment:
+      - OLLAMA_SKIP_GPU_TESTS=false
+      - NVIDIA_VISIBLE_DEVICES=all
+    networks:
+      - meeting_network
     restart: unless-stopped
 
 networks:
@@ -103,16 +104,5 @@ networks:
 
 volumes:
   shared_data:
-    driver: local
-  gateway_logs:
-    driver: local
-  preprocess_logs:
-    driver: local
-  whisper_logs:
-    driver: local
-  summarization_logs:
-    driver: local
   whisper_cache:
-    driver: local
   ollama_data:
-    driver: local

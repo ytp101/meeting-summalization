@@ -15,7 +15,7 @@ import time
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
-    filename=os.getenv('LOG_FILE', 'whisper.log')
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 logger.info("Whisper service is starting up")
@@ -58,7 +58,10 @@ def get_whisper_model():
                 model=MODEL_ID,
                 torch_dtype=torch_dtype,
                 device=device,
-                generate_kwargs={"language": LANGUAGE}
+                generate_kwargs={"language": LANGUAGE},
+                return_timestamps=True,
+                chunk_length_s=30,
+                batch_size=1
             )
             logger.info(f"Model loaded successfully")
         except Exception as e:
@@ -151,7 +154,16 @@ async def transcribe(filepath: FilePath):
         transcription = model(str(input_file))
         
         with open(output_file, "w", encoding="utf-8") as file_output:
-            file_output.write(transcription['text'])
+            # Handle both timestamped and non-timestamped outputs
+            if isinstance(transcription, dict) and 'chunks' in transcription:
+                # For timestamped output
+                full_text = ""
+                for chunk in transcription['chunks']:
+                    full_text += chunk['text'] + " "
+                file_output.write(full_text.strip())
+            else:
+                # For regular output
+                file_output.write(transcription['text'])
         
         elapsed_time = time.time() - start_time
         logger.info(f"Transcription completed in {elapsed_time:.2f} seconds")

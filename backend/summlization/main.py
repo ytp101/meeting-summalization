@@ -14,7 +14,7 @@ import json
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
-    filename=os.getenv('LOG_FILE', 'summarization.log')
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 logger.info("Summarization service is starting up")
@@ -111,12 +111,19 @@ async def summarization(filepath: FilePath):
     request_data = {
         "model": MODEL_ID,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": input_data}
+            {
+                "role": "system", 
+                "content": "You are a meeting summarization assistant. Create a concise and structured summary of the meeting transcript."
+            },
+            {
+                "role": "user", 
+                "content": f"Summarize this meeting transcript in Thai language:\n\n{input_data}"
+            }
         ],
         "options": {
-            "temperature": TEMPERATURE,
-            "num_predict": MAX_TOKENS
+            "num_predict": int(MAX_TOKENS),
+            "temperature": float(TEMPERATURE),
+            "context_window": 8192
         }
     }
     

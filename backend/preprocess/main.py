@@ -13,7 +13,7 @@ import shutil
 logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO,
-    filename=os.getenv('LOG_FILE', 'preprocess.log')
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 logger.info("Preprocess service is starting up")
