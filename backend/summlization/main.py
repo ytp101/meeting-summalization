@@ -68,7 +68,7 @@ async def healthcheck():
     except Exception as e:
         return {"status": "unhealthy", "ollama": "unavailable", "error": str(e)}
 
-@app.post("/summlization/")
+@app.post("/summarization/")
 async def summarization(filepath: FilePath):
     """Generate summary of transcription using Ollama"""
     start_time = time.time()
@@ -113,7 +113,7 @@ async def summarization(filepath: FilePath):
         "messages": [
             {
                 "role": "system", 
-                "content": "You are a meeting summarization assistant. Create a concise and structured summary of the meeting transcript."
+                "content": SYSTEM_PROMPT
             },
             {
                 "role": "user", 
@@ -145,16 +145,30 @@ async def summarization(filepath: FilePath):
                     detail=f"Ollama API error: {response.text}"
                 )
                 
+        response_text = response.text
+        try:
             result = response.json()
-            
-            if "message" not in result or "content" not in result["message"]:
-                logger.error(f"Unexpected response format from Ollama: {result}")
+        except json.JSONDecodeError:
+            # If standard parsing fails, try to extract the first valid JSON object
+            logger.warning("Standard JSON parsing failed, attempting to extract first valid JSON object")
+            try:
+                result = json.loads(response_text.split('\n')[0])
+            except Exception as e:
+                logger.error(f"Failed to parse response: {e}")
+                logger.error(f"Response content: {response_text[:1000]}...")  # Log first 1000 chars
                 raise HTTPException(
                     status_code=500,
-                    detail="Unexpected response format from Ollama"
+                    detail="Failed to parse response from Ollama"
                 )
-                
-            summary = result["message"]["content"]
+        
+        if "message" not in result or "content" not in result["message"]:
+            logger.error(f"Unexpected response format from Ollama: {result}")
+            raise HTTPException(
+                status_code=500,
+                detail="Unexpected response format from Ollama"
+            )
+            
+        summary = result["message"]["content"]
             
     except httpx.TimeoutException:
         logger.error(f"Ollama API request timed out after {REQUEST_TIMEOUT} seconds")
@@ -178,7 +192,7 @@ async def summarization(filepath: FilePath):
     output_filename = f"{input_file_name_request}_summarized"
     filepath_dict = [
         {
-            "summalization_file_path": output_filename
+            "summarization_file_path": output_filename
         }
     ]
     

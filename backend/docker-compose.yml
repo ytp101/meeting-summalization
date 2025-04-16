@@ -12,7 +12,7 @@ services:
     environment:
       - PREPROCESS_SERVICE_URL=http://preprocess:8001/preprocess/
       - WHISPER_SERVICE_URL=http://whisper:8002/whisper/
-      - SUMMARIZATION_SERVICE_URL=http://summarization:8003/summlization/
+      - SUMMARIZATION_SERVICE_URL=http://summarization:8003/summarization/
       - TZ=Asia/Bangkok
     restart: unless-stopped
     networks:

@@ -22,7 +22,7 @@ logger.info("Gateway service is starting up")
 BASE_DIR = os.getenv('BASE_DIR', '/usr/local/app/data/mp4/')
 PREPROCESS_ENDPOINT = os.getenv('PREPROCESS_SERVICE_URL', 'http://preprocess:8001/preprocess/')
 WHISPER_ENDPOINT = os.getenv('WHISPER_SERVICE_URL', 'http://whisper:8002/whisper/')
-SUMMLIZATION_ENDPOINT = os.getenv('SUMMARIZATION_SERVICE_URL', 'http://summarization:8003/summlization/')
+SUMMARIZATION_ENDPOINT = os.getenv('SUMMARIZATION_SERVICE_URL', 'http://summarization:8003/summarization/')
 REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', 1200))  # 20 minutes default
 
 # Create directories if they don't exist
@@ -49,7 +49,7 @@ async def healthcheck():
         for service, url in [
             ("preprocess", PREPROCESS_ENDPOINT.replace("/preprocess/", "/")),
             ("whisper", WHISPER_ENDPOINT.replace("/whisper/", "/")),
-            ("summarization", SUMMLIZATION_ENDPOINT.replace("/summlization/", "/"))
+            ("summarization", SUMMARIZATION_ENDPOINT.replace("/summlization/", "/"))
         ]:
             try:
                 response = await client.get(url, timeout=5.0)
@@ -151,7 +151,7 @@ async def create_upload_file(file: UploadFile = File(...)):
     try:
         async with httpx.AsyncClient() as client:
             summarization_response = await client.post(
-                SUMMLIZATION_ENDPOINT,
+                SUMMARIZATION_ENDPOINT,
                 json={"filename": transcription_file_path},
                 timeout=REQUEST_TIMEOUT
             )
@@ -167,7 +167,7 @@ async def create_upload_file(file: UploadFile = File(...)):
     
     # Step 7: Get summarization file path
     try:
-        summarization_file_path = summarization_response.json()[0]['summalization_file_path']
+        summarization_file_path = summarization_response.json()[0]['summarization_file_path']
     except (KeyError, IndexError) as e:
         logger.error(f"Invalid summarization response format: {e}")
         raise HTTPException(status_code=500, detail="Invalid response from summarization service")
