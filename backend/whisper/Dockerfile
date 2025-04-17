@@ -13,9 +13,7 @@ RUN mkdir -p /usr/local/app/data/txt && chmod 777
 
 # Install Python dependencies
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
-    pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # make directory for cache 
 RUN mkdir -p /home/app/.cache

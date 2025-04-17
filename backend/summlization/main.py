@@ -29,22 +29,27 @@ OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
 SYSTEM_PROMPT = os.getenv('SYSTEM_PROMPT', 'Summarize the following meeting transcript. Focus on key decisions, action items, and important discussions. Make the summary concise yet comprehensive.')
 MAX_TOKENS = int(os.getenv('MAX_TOKENS', 4096))
 TEMPERATURE = float(os.getenv('TEMPERATURE', 0.2))
-REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', 300))  # 5 minutes default
+
+# 5mins timeout 
+REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', 300)) 
 
 # Create directories if they don't exist
 os.makedirs(BASE_DIR_TXT, exist_ok=True)
 
 app = FastAPI(title="Meeting Summarization Service")
 
+# / (root) for gateway healthcheck 
 @app.get("/")
 def running():
     return {"status": "Summarization service is running"}
 
+# for individual healthcheck 
 @app.get("/healthcheck")
 async def healthcheck():
     """Check if Ollama service is accessible"""
     try:
         async with httpx.AsyncClient() as client:
+            # send request to ollama endpoint 
             response = await client.get(
                 f"{OLLAMA_HOST}/api/tags",
                 timeout=5.0
@@ -52,6 +57,8 @@ async def healthcheck():
             
             if response.status_code == 200:
                 models = response.json().get("models", [])
+                
+                # check if MODEL_ID is had been in ollama service 
                 model_available = any(model["name"] == MODEL_ID for model in models)
                 
                 if model_available:
@@ -68,6 +75,7 @@ async def healthcheck():
     except Exception as e:
         return {"status": "unhealthy", "ollama": "unavailable", "error": str(e)}
 
+# main part of this service (read txt send to ollama service and save to txt file)
 @app.post("/summarization/")
 async def summarization(filepath: FilePath):
     """Generate summary of transcription using Ollama"""
