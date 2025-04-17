@@ -16,7 +16,7 @@ services:
       - TZ=Asia/Bangkok
     restart: unless-stopped
     networks:
-      - meeting_network
+      - meeting_summarization_network
     depends_on:
       - preprocess
       - whisper
@@ -32,7 +32,7 @@ services:
       - TZ=Asia/Bangkok
     restart: unless-stopped
     networks:
-      - meeting_network
+      - meeting_summarization_network
 
   whisper:
     build:
@@ -41,7 +41,6 @@ services:
     volumes:
       - shared_data:/usr/local/app/data
       - whisper_cache:/home/app/.cache
-    # runtime: nvidia
     deploy:
       resources:
         reservations:
@@ -56,7 +55,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
     restart: unless-stopped
     networks:
-      - meeting_network
+      - meeting_summarization_network
 
   summarization:
     build:
@@ -75,7 +74,7 @@ services:
       - ollama
     restart: unless-stopped
     networks:
-      - meeting_network
+      - meeting_summarization_network
 
   ollama:
     image: ollama/ollama:latest
@@ -83,7 +82,6 @@ services:
       - ollama_data:/root/.ollama
     ports:
       - "11435:11434"
-    # runtime: nvidia
     deploy:
       resources:
         reservations:
@@ -95,11 +93,11 @@ services:
       - OLLAMA_SKIP_GPU_TESTS=false
       - NVIDIA_VISIBLE_DEVICES=all
     networks:
-      - meeting_network
+      - meeting_summarization_network
     restart: unless-stopped
 
 networks:
-  meeting_network:
+  meeting_summarization_network:
     driver: bridge
 
 volumes:
