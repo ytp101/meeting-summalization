@@ -8,12 +8,15 @@ WORKDIR /usr/local/app
 RUN apt-get -y update 
 
 # make wav and txt directory 
-RUN mkdir -p /usr/local/app/data/wav && chmod 777
-RUN mkdir -p /usr/local/app/data/txt && chmod 777
+RUN mkdir -p /usr/local/app/data/wav && chmod 777 /usr/local/app/data/wav
+RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
+
+# install pip 
+RUN apt-get install python-pip -y
 
 # Install Python dependencies
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # make directory for cache 
 RUN mkdir -p /home/app/.cache
