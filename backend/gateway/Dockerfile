@@ -1,6 +1,9 @@
 # use python 3.12.10-slim for small size image 
 FROM python:3.12.10-slim
 
+# update system
+RUN apt-get -y update
+
 # set work directory
 WORKDIR /usr/local/app
 
