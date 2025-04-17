@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /usr/local/app/data/mp4/ && chmod 777 /usr/local/app/data/mp4/
 RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
 
-# Expose port 8000 (prepare for frontend request)
+# Expose port 8000 (prepare for frontend request (8000))
 EXPOSE 8000
 
 # setup app user 

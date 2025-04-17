@@ -7,7 +7,6 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 import logging
 from pathlib import Path
-import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -22,15 +21,18 @@ class FilePath(BaseModel):
     filename: str
 
 # Environment variables with defaults
+# setup directory for mp4 (access) and wav to get file from 
 BASE_DIR_MP4 = os.getenv('BASE_DIR_MP4', '/usr/local/app/data/mp4/')
 BASE_DIR_WAV = os.getenv('BASE_DIR_WAV', '/usr/local/app/data/wav/')
-FFMPEG_TIMEOUT = int(os.getenv('FFMPEG_TIMEOUT', 600))  # 10 minutes default
+
+# timeout for ffmpeg processing
+FFMPEG_TIMEOUT = int(os.getenv('FFMPEG_TIMEOUT', 600)) 
 
 # Create directories if they don't exist
 os.makedirs(BASE_DIR_MP4, exist_ok=True)
 os.makedirs(BASE_DIR_WAV, exist_ok=True)
 
-# Check if ffmpeg is available
+# Check if ffmpeg is available (on start)
 try:
     ffmpeg_version = asyncio.run(asyncio.create_subprocess_exec(
         "ffmpeg", "-version",
@@ -42,12 +44,15 @@ except Exception as e:
     logger.error(f"FFmpeg is not available: {e}")
     # We'll continue but log the error
 
+# setup title of the service
 app = FastAPI(title="Meeting Audio Preprocessor")
 
+# / (root) for gateway healthcheck 
 @app.get("/")
 def running():
     return {"status": "Preprocess service is running"}
 
+# in case of individual health check (use to check ffmpeg service)
 @app.get("/healthcheck")
 async def healthcheck():
     """Check if service dependencies are available"""
@@ -65,21 +70,24 @@ async def healthcheck():
     except Exception as e:
         return {"status": "unhealthy", "ffmpeg": "unavailable", "error": str(e)}
 
+# main purpose of this service recevied mp4 (/mp4) file name then process by ffmpeg and save to .wav (wav)
 @app.post("/preprocess/")
 async def preprocess(filepath: FilePath):
     """Convert MP4 video to WAV audio format optimized for transcription"""
     logger.info("Received file path request")
     
     try:
+        # dump json request
         result = filepath.model_dump()
-        input_file_name_request = result['filename']
-        logger.info(f"Processing file: {input_file_name_request}")
+        request_file_name = result['filename']
+        logger.info(f"Processing file: {request_file_name}")
     except Exception as e:
         logger.error(f"Failed to process request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request format")
-    
-    input_file = Path(BASE_DIR_MP4) / f"{input_file_name_request}.mp4"
-    output_file = Path(BASE_DIR_WAV) / f"{input_file_name_request}.wav"
+
+    # construct input file name and output file name (to use in ffmpeg)
+    input_file = Path(BASE_DIR_MP4) / f"{request_file_name}.mp4"
+    output_file = Path(BASE_DIR_WAV) / f"{request_file_name}.wav"
     
     # Check if input file exists
     if not input_file.exists():
@@ -103,6 +111,7 @@ async def preprocess(filepath: FilePath):
     logger.info(f"Running command: {' '.join(command)}")
     
     try:
+        # subprocess according to ffmpeg command above
         process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.PIPE,
@@ -111,6 +120,8 @@ async def preprocess(filepath: FilePath):
         
         # Create timeout task
         try:
+            # wait for process 
+            # TODO: understand asyncio and process 
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=FFMPEG_TIMEOUT)
             
             # Log any error output
@@ -147,7 +158,7 @@ async def preprocess(filepath: FilePath):
     # Return file path without extension
     filepath_dict = [
         {
-            "preprocessd_file_path": input_file_name_request
+            "preprocessd_file_path": request_file_name
         }
     ]
     
