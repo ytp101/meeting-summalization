@@ -8,7 +8,7 @@ WORKDIR /usr/local/app
 RUN apt-get -y update
 
 # setup txt directory 
-RUN mkdir -p /usr/local/app/data/txt && chmod 777
+RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
 
 # Install Python dependencies
 COPY requirements.txt ./
