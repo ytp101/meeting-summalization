@@ -5,14 +5,11 @@ FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 WORKDIR /usr/local/app
 
 # Install system dependencies
-RUN apt-get -y update 
+RUN apt-get -y update && apt-get install -y python3-pip
 
 # make wav and txt directory 
 RUN mkdir -p /usr/local/app/data/wav && chmod 777 /usr/local/app/data/wav
 RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
-
-# install pip 
-RUN apt-get install python-pip -y
 
 # Install Python dependencies
 COPY requirements.txt ./
