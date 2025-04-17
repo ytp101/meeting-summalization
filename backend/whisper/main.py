@@ -20,6 +20,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 logger.info("Whisper service is starting up")
 
+# setup request model 
 class FilePath(BaseModel):
     filename: str
 
@@ -38,7 +39,7 @@ os.makedirs(BASE_DIR_WAV, exist_ok=True)
 os.makedirs(BASE_DIR_TXT, exist_ok=True)
 os.makedirs(HF_HOME, exist_ok=True)
 
-# Setup device and model
+# setup app and title 
 app = FastAPI(title="Whisper Speech-to-Text Service")
 
 # Global variable to hold the model
@@ -69,6 +70,8 @@ def get_whisper_model():
             raise RuntimeError(f"Failed to load Whisper model: {e}")
     return whisper_model
 
+# load model on startup 
+# TODO: change on event -> lifespan 
 @app.on_event("startup")
 async def startup_event():
     """Load model on startup"""
@@ -76,8 +79,8 @@ async def startup_event():
         get_whisper_model()
     except Exception as e:
         logger.error(f"Failed to load model on startup: {e}")
-        # We'll continue but will try again on first request
 
+# use for gateway health check to check the status of whisper service 
 @app.get("/")
 def running():
     """Health check endpoint"""
@@ -87,6 +90,7 @@ def running():
         "device": "cuda" if torch.cuda.is_available() else "cpu"
     }
 
+# use for individual health check & check cuda 
 @app.get("/healthcheck")
 def healthcheck():
     """Check model and GPU status"""
@@ -116,6 +120,7 @@ def healthcheck():
         "gpu": gpu_info,
     }
 
+# main purpose of this script 
 @app.post("/whisper/")
 async def transcribe(filepath: FilePath):
     """Transcribe audio file using Whisper"""
@@ -156,7 +161,7 @@ async def transcribe(filepath: FilePath):
         with open(output_file, "w", encoding="utf-8") as file_output:
             # Handle both timestamped and non-timestamped outputs
             if isinstance(transcription, dict) and 'chunks' in transcription:
-                # For timestamped output
+                # For timestamped output (chunk output)
                 full_text = ""
                 for chunk in transcription['chunks']:
                     full_text += chunk['text'] + " "

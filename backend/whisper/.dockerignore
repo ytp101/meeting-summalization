@@ -1,1 +1,2 @@
-dockerfile
+# ignore Dockerfile on build
+Dockerfile
