@@ -24,10 +24,6 @@ EXPOSE 8000
 RUN useradd app 
 USER app
 
-# create directory for uploaded files (which map to persistent volume) && give permession to write
-RUN mkdir -p /usr/local/app/data/mp4/ && chmod 777 /usr/local/app/data/mp4/
-RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
-
 # run container 
 COPY main.py ./
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
