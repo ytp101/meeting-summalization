@@ -7,9 +7,6 @@ WORKDIR /usr/local/app
 # Install system dependencies
 RUN apt-get -y update
 
-# setup txt directory 
-RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
-
 # Install Python dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
@@ -26,12 +23,17 @@ ENV BASE_DIR_TXT=/usr/local/app/data/txt/ \
 # Expose port 8003
 EXPOSE 8003
 
-# Copy application code
-COPY main.py ./
+# Create the app user and add to the appgroup with fixed GID
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -s /bin/bash app
 
-# Switch to non-root user
-RUN useradd app
+# Create directories with group write permissions
+RUN mkdir -p /usr/local/app/data/mp4 /usr/local/app/data/txt /usr/local/app/data/audio /usr/local/app/data/wav && \
+    chown -R app:appgroup /usr/local/app
+
+# change to app user for running application
 USER app
 
-# Run container
+# Copy application code & run application
+COPY main.py ./
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]

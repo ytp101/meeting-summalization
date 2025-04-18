@@ -13,17 +13,20 @@ COPY requirements.txt ./
 # use pip to install libraries acccorind to requirement file
 RUN pip install --no-cache-dir -r requirements.txt
 
-# create directory for uploaded files (which map to persistent volume) && give permession to write
-RUN mkdir -p /usr/local/app/data/mp4/ && chmod 777 /usr/local/app/data/mp4/
-RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt/
-
 # Expose port 8000 (prepare for frontend request (8000))
 EXPOSE 8000
 
-# setup app user 
-RUN useradd app 
+# Create the app user and add to the appgroup with fixed GID
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -s /bin/bash app
+
+# Create directories with group write permissions
+RUN mkdir -p /usr/local/app/data/mp4 /usr/local/app/data/txt /usr/local/app/data/audio /usr/local/app/data/wav && \
+    chown -R app:appgroup /usr/local/app
+
+# change to app user for run application
 USER app
 
-# run container 
+# copy application file & run application 
 COPY main.py ./
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 

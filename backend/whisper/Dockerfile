@@ -7,10 +7,6 @@ WORKDIR /usr/local/app
 # Install system dependencies
 RUN apt-get -y update && apt-get install -y python3-pip
 
-# make wav and txt directory 
-RUN mkdir -p /usr/local/app/data/wav && chmod 777 /usr/local/app/data/wav
-RUN mkdir -p /usr/local/app/data/txt && chmod 777 /usr/local/app/data/txt
-
 # Install Python dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
@@ -22,15 +18,20 @@ RUN mkdir -p /home/app/.cache
 ENV HF_HOME=/home/app/.cache
 ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
 
-# useradd app user and switch to 
-RUN useradd app 
-USER app
-
 # Expose port 8002
 EXPOSE 8002
 
-# Copy application code
-COPY main.py ./
+# Create the app user and add to the appgroup with fixed GID
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -s /bin/bash app
 
-# Run container
+# Create directories with group write permissions
+RUN mkdir -p /usr/local/app/data/mp4 /usr/local/app/data/txt /usr/local/app/data/audio /usr/local/app/data/wav && \
+    chown -R app:appgroup /usr/local/app
+
+# change to app user for running application
+USER app
+
+# Copy application code run application 
+COPY main.py ./
 CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"] 
