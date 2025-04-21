@@ -5,18 +5,11 @@ FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 WORKDIR /usr/local/app
 
 # Install system dependencies
-RUN apt-get -y update && apt-get install -y python3-pip
+RUN apt-get -y update && apt-get install -y python3-pip && apt-get install -y ffmpeg
 
 # Install Python dependencies
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-
-# make directory for cache 
-RUN mkdir -p /home/app/.cache
-
-# Set environment variables for logging and cache
-ENV HF_HOME=/home/app/.cache
-ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
 
 # Expose port 8002
 EXPOSE 8002
@@ -28,6 +21,14 @@ RUN groupadd -g 1000 appgroup && \
 # Create directories with group write permissions
 RUN mkdir -p /usr/local/app/data/wav /usr/local/app/data/txt && \
     chown -R app:appgroup /usr/local/app
+
+# make directory for cache 
+RUN mkdir -p /home/app/.cache && \
+    chown -R app:appgroup /home/app/.cache
+
+# Set environment variables for logging and cache
+ENV HF_HOME=/home/app/.cache
+ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
 
 # change to app user for running application
 USER app
