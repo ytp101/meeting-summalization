@@ -21,7 +21,7 @@ RUN groupadd -g 1000 appgroup && \
     useradd -u 1000 -g appgroup -s /bin/bash app
 
 # Create directories with group write permissions
-RUN mkdir -p /usr/local/app/data/mp4 /usr/local/app/data/txt /usr/local/app/data/audio /usr/local/app/data/wav && \
+RUN mkdir -p /usr/local/app/data/mp4 /usr/local/app/data/txt && \
     chown -R app:appgroup /usr/local/app
 
 # change to app user for run application
