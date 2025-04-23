@@ -68,6 +68,11 @@ python /backend/whisper/main.py
 python /backend/summalization/main.py
 ```
 
+### Ollama Service 
+```bash
+ollama pull llama3
+```
+
 You can call them in order via API Gateway or manually.
 
 ## 🔐 API Reference
