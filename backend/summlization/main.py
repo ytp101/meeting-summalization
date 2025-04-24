@@ -115,19 +115,12 @@ async def summarization(filepath: FilePath):
         logger.error(f"Failed to read input file: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to read input file: {str(e)}")
     
+    logger.info(f"Content: {input_data}")
     # Prepare request for Ollama
     request_data = {
         "model": MODEL_ID,
-        "messages": [
-            {
-                "role": "system", 
-                "content": SYSTEM_PROMPT
-            },
-            {
-                "role": "user", 
-                "content": f"Summarize this meeting transcript in Thai language:\n\n{input_data}"
-            }
-        ],
+        "prompt": f"summalize this transcription: {input_data}",
+        "stream": False,
         "options": {
             "num_predict": int(MAX_TOKENS),
             "temperature": float(TEMPERATURE),
@@ -141,7 +134,8 @@ async def summarization(filepath: FilePath):
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"{OLLAMA_HOST}/api/chat",
+                # f"{OLLAMA_HOST}/api/chat",
+                f"{OLLAMA_HOST}/api/generate",
                 json=request_data,
                 timeout=REQUEST_TIMEOUT
             )
@@ -152,31 +146,18 @@ async def summarization(filepath: FilePath):
                     status_code=500, 
                     detail=f"Ollama API error: {response.text}"
                 )
-                
-        response_text = response.text
-        try:
-            result = response.json()
-        except json.JSONDecodeError:
-            # If standard parsing fails, try to extract the first valid JSON object
-            logger.warning("Standard JSON parsing failed, attempting to extract first valid JSON object")
-            try:
-                result = json.loads(response_text.split('\n')[0])
-            except Exception as e:
-                logger.error(f"Failed to parse response: {e}")
-                logger.error(f"Response content: {response_text[:1000]}...")  # Log first 1000 chars
-                raise HTTPException(
-                    status_code=500,
-                    detail="Failed to parse response from Ollama"
-                )
         
-        if "message" not in result or "content" not in result["message"]:
-            logger.error(f"Unexpected response format from Ollama: {result}")
-            raise HTTPException(
-                status_code=500,
-                detail="Unexpected response format from Ollama"
-            )
-            
-        summary = result["message"]["content"]
+        # read response status code 
+        logger.info(f"Response status: {response.status_code}")
+        
+        # parse json response 
+        response_json = response.json()
+        
+        logger.info(f"Response Json: {response_json}")
+        
+        # extract text
+        summary = response_json.get("response")
+        logger.info(summary)
             
     except httpx.TimeoutException:
         logger.error(f"Ollama API request timed out after {REQUEST_TIMEOUT} seconds")
