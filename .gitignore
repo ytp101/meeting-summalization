@@ -1,0 +1,8 @@
+# ignore test folder 
+/test
+
+# ignore cache folder 
+/backend/whisper/cache
+
+# ignore database folder 
+/database
