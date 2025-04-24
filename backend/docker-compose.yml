@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared_data:/usr/local/app/data
+    environment:
+      - PREPROCESS_SERVICE_URL=http://preprocess:8001/preprocess/
+      - WHISPER_SERVICE_URL=http://whisper:8002/whisper/
+      - SUMMARIZATION_SERVICE_URL=http://summarization:8003/summarization/
+      - TZ=Asia/Bangkok
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+    depends_on:
+      - preprocess
+      - whisper
+      - summarization
+
+  preprocess:
+    build:
+      context: ./preprocess
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - shared_data:/usr/local/app/data
+    environment:
+      - TZ=Asia/Bangkok
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
+  whisper:
+    build:
+      context: ./whisper
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    volumes:
+      - shared_data:/usr/local/app/data
+      - whisper_cache:/home/app/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - TZ=Asia/Bangkok
+      - MODEL_ID=openai/whisper-large-v3-turbo
+      - LANGUAGE=th
+      - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
+  summarization:
+    build:
+      context: ./summlization
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - shared_data:/usr/local/app/data
+    environment:
+      - TZ=Asia/Bangkok
+      - MODEL_ID=llama3
+      - OLLAMA_HOST=http://ollama:11434
+      - MAX_TOKENS=4096
+      - TEMPERATURE=0.2
+      - REQUEST_TIMEOUT=600
+    depends_on:
+      - ollama
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - OLLAMA_SKIP_GPU_TESTS=false
+      - NVIDIA_VISIBLE_DEVICES=all
+    networks:
+      - meeting_summarization_network
+    restart: unless-stopped
+
+networks:
+  meeting_summarization_network:
+    driver: bridge
+
+volumes:
+  shared_data:
+  whisper_cache:
+  ollama_data:
