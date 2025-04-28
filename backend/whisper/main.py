@@ -1,3 +1,49 @@
+"""
+Whisper Speech-to-Text Service for Meeting Summarization Pipeline
+------------------------------------------------------------------
+
+This FastAPI service provides speech-to-text transcription capabilities by utilizing a Hugging Face `Whisper` model. 
+It processes `.wav` audio files and outputs the transcribed text into `.txt` files for subsequent summarization.
+
+Main Responsibilities:
+- Accept a `.wav` filename via `/whisper/` endpoint.
+- Load the Whisper ASR model (with automatic CUDA or CPU support).
+- Transcribe the given audio file into plain text.
+- Save the transcription output to the `/txt` directory.
+- Return the output filename (without extension) for downstream use.
+
+Supporting Features:
+- `/` (root endpoint): Basic service healthcheck, reporting model and device status.
+- `/healthcheck`: Detailed model and GPU status, including memory metrics if CUDA is available.
+- Model loading at startup for faster first-time responses.
+- Auto-handling of Hugging Face cache directory via environment variable.
+- Structured logging at each critical stage.
+- GPU memory cleanup after transcription (if using CUDA).
+
+Environment Variables:
+- `BASE_DIR_WAV`: Directory path to locate `.wav` input files (default: `/usr/local/app/data/wav/`).
+- `BASE_DIR_TXT`: Directory path to save `.txt` output files (default: `/usr/local/app/data/txt/`).
+- `MODEL_ID`: Hugging Face model ID to load (default: `openai/whisper-large-v3-turbo`).
+- `LANGUAGE`: Language tag for transcription (default: `'th'` for Thai).
+- `HF_HOME`: Hugging Face cache directory (default: `/home/app/.cache`).
+- `PORT`: Port to serve the FastAPI app (default: 8002).
+
+Requirements:
+- Python 3.8+
+- FastAPI
+- Uvicorn
+- PyTorch
+- Transformers (Hugging Face)
+- GPU (optional but recommended for faster transcription)
+
+Notes:
+- Input `.wav` files must be present before calling the transcription endpoint.
+- CUDA device is automatically detected and used if available; otherwise, fallback to CPU.
+
+---
+Made with FastAPI, Whisper, and enough logging to make Sherlock Holmes proud.
+"""
+
 from fastapi import FastAPI, HTTPException
 import torch
 import uvicorn

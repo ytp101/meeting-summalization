@@ -1,3 +1,44 @@
+"""
+Preprocessing Service for Meeting Summarization Pipeline
+---------------------------------------------------------
+
+This FastAPI service handles preprocessing of uploaded meeting recordings by converting `.mp4` files 
+into normalized `.wav` audio files, optimized for further transcription by the Whisper service.
+
+Main Responsibilities:
+- Accept a filename via `/preprocess/` endpoint.
+- Use FFmpeg to extract audio from the corresponding `.mp4` file in the `/mp4` directory.
+- Normalize the audio and save it as a `.wav` file in the `/wav` directory.
+- Return the output filename (without extension) for the next pipeline step.
+
+Supporting Features:
+- `/` (root endpoint): Basic "service is alive" check.
+- `/healthcheck`: Validates availability of FFmpeg for processing.
+- Structured logging for every step of the conversion process.
+- Timeout handling for FFmpeg to prevent hanging processes.
+- Automatic directory creation for both input and output paths.
+
+Environment Variables:
+- `BASE_DIR_MP4`: Directory path to locate `.mp4` input files (default: `/usr/local/app/data/mp4/`).
+- `BASE_DIR_WAV`: Directory path to save `.wav` output files (default: `/usr/local/app/data/wav/`).
+- `FFMPEG_TIMEOUT`: Timeout duration for FFmpeg processing in seconds (default: 600 seconds / 10 minutes).
+- `PORT`: Port to serve the FastAPI app (default: 8001).
+
+Requirements:
+- Python 3.8+
+- FastAPI
+- Uvicorn
+- FFmpeg installed and accessible in system PATH
+- asyncio for asynchronous process handling
+
+Notes:
+- Input `.mp4` files must exist in the specified directory before processing.
+- The service heavily relies on FFmpeg; absence or failure of FFmpeg will degrade service functionality.
+
+---
+Built with FastAPI, asyncio magic, and a strong belief that your meetings deserve better than "Sorry, can you repeat that?".
+"""
+
 from fastapi import FastAPI, HTTPException
 import uvicorn
 import os

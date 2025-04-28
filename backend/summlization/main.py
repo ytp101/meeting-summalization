@@ -1,3 +1,48 @@
+"""
+Summarization Service for Meeting Summarization Pipeline
+---------------------------------------------------------
+
+This FastAPI service generates concise summaries from meeting transcription text files 
+by utilizing an LLM model (such as Llama3) via the Ollama API.
+
+Main Responsibilities:
+- Accept a `.txt` filename via `/summarization/` endpoint.
+- Read the corresponding transcription file.
+- Send the transcription to an Ollama LLM endpoint with a summarization prompt.
+- Save the generated summary to a new `_summarized.txt` file.
+- Return the output filename (without extension) for downstream usage or client retrieval.
+
+Supporting Features:
+- `/` (root endpoint): Basic service healthcheck.
+- `/healthcheck`: Verify Ollama API availability and confirm the presence of the target model.
+- Structured logging at every important step of the flow.
+- Timeout handling for Ollama API calls to prevent long hangs.
+- Dynamic request construction with configurable system prompts, token limits, and temperature settings.
+
+Environment Variables:
+- `BASE_DIR_TXT`: Directory path for input and output `.txt` files (default: `/usr/local/app/data/txt/`).
+- `MODEL_ID`: Target LLM model ID hosted by Ollama (default: `llama3`).
+- `OLLAMA_HOST`: Host URL for the Ollama API (default: `http://localhost:11434`).
+- `SYSTEM_PROMPT`: Instruction prompt sent to guide the summarization output.
+- `MAX_TOKENS`: Maximum number of tokens allowed in the model prediction (default: 4096).
+- `TEMPERATURE`: Sampling temperature for model creativity (default: 0.2).
+- `REQUEST_TIMEOUT`: Timeout for API requests to Ollama (default: 300 seconds).
+- `PORT`: Port to serve the FastAPI app (default: 8003).
+
+Requirements:
+- Python 3.8+
+- FastAPI
+- Uvicorn
+- httpx
+
+Notes:
+- Input `.txt` transcription files must already exist.
+- Ollama service must be accessible and have the required model loaded.
+
+---
+Fueled by FastAPI, Ollama, and the existential dread of listening to 3-hour meetings in real-time.
+"""
+
 from fastapi import FastAPI, HTTPException
 import uvicorn
 import os
