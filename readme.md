@@ -1,8 +1,4 @@
-<!-- <img src="./images/logo.sample.png" alt="Logo of the project" align="right"> -->
-
-# Meeting Summarization &middot;
-
-<!-- [![Build Status](https://img.shields.io/travis/npm/npm/latest.svg?style=flat-square)](https://travis-ci.org/npm/npm) [![npm](https://img.shields.io/npm/v/npm.svg?style=flat-square)](https://www.npmjs.com/package/npm) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com) [![GitHub license](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](https://github.com/your/your-project/blob/master/LICENSE) -->
+# Meeting Summarization <img src="./images/logo.svg" alt="Logo of the project" height=35 width=35>
 
 > Automatically summarize meeting recordings from `.mp4` or `.mp3` into concise text using Whisper and LLMs.
 
@@ -15,7 +11,7 @@
 - Transcribes using `Whisper` (supports Thai and multilingual)
 - Summarizes transcripts using an LLM
 - FastAPI microservice architecture
-- Designed for real-time meeting analytics
+- Designed for real-time meeting analytics (Later)
 
 ---
 
@@ -28,63 +24,55 @@ git clone https://github.com/ytp101/meeting-summalization.git
 cd meeting-summalization/
 ```
 
-## 🛠 Development
+## 🛠 Development Setup
 ### ⚙️ Prerequisites
 * Python 3.10+
-* FFmpeg installed and in your PATH
-* Node.js (for frontend, optional)
+* Node.js (optional for frontend)
 
 ### 📦 Backend Setup
 
 ```bash
 cd backend
-pip install -r requirements.txt
+docker compose up 
 ```
+
+#### 🐳 Ollama Container Setup
+After the container is running, pull the Llama3 model:
+
+```bash
+docker exec ollama ollama pull llama3
+```
+
+You can then interact with the services via the API Gateway (port 8000) or its API Docs (http://localhost:8000/docs)
 
 ### 💻 Frontend Setup
 ```bash
 cd frontend/meeting-summalization
 npm install
+npm run dev
 ```
-
-## 🧪 Running the Services
-### Gateway Service 
-```bash
-python /backend/gateway/main.py
-```
-
-### 🔊 Preprocess Service (FFmpeg audio extractor)
-```bash
-python /backend/preprocess/main.py
-```
-
-### 🗣 Whisper Service (Transcriber)
-```bash
-python /backend/whisper/main.py
-```
-
-### 🧠 Summarizer Service (LLM-based)
-```bash
-python /backend/summalization/main.py
-```
-
-### Ollama Service 
-```bash
-ollama pull llama3
-```
-
-You can call them in order via API Gateway or manually.
 
 ## 🔐 API Reference
 | Endpoint      | Method        | Description                           |
 | ------------- | ------------- | ------------------------------------- |
-| /gateway/     | POST          | Received mp4 or mp3 from user         |
-| /preprocess/  | POST          | Extract .wav from video               |
-| /whisper/     | POST          | Transcribe audio using Whisper        |
-| /summarize/   | POST          | Generate text summary from transcript |
+| /uploadfile/     | POST          | Upload a .mp4 file and proces       |
+| /preprocess/  | POST          | Convert .mp4 to .wav audio             |
+| /whisper/     | POST          | Transcribe .wav to .txt      |
+| /summarize/   | POST          | 	Summarize transcription text |
+| /healthcheck/ | GET | 	Health status for each service |
 
-## 🗃 Database
-No persistent database yet — results are stored as .wav, .txt, and .json in the database/ folder.
+## 🗃 Storage
+* Persistent Docker volumes are used to store:
+    * Uploaded videos (mp4/)
+    * Extracted audio (wav/)
+    * Transcriptions and summaries (txt/)
 
-## 📄 License
-MIT License. See LICENSE file for more info.
+📄 License
+MIT License — See the LICENSE file for more information.
+
+📈 Future Improvements
+- [ ] .mp3 input support
+- [ ] Frontend dashboard for upload and summaries
+- [ ] Realtime meeting summarization
+- [ ] User authentication and management
+- [ ] Full Kubernetes deployment templates
