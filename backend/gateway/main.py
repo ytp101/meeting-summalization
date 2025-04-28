@@ -1,3 +1,49 @@
+"""
+Gateway Service for Meeting Summarization Pipeline
+---------------------------------------------------
+
+This FastAPI service acts as a gateway that orchestrates a multi-stage pipeline for meeting summarization, 
+handling file uploads, preprocessing, transcription, and summarization by communicating with dedicated microservices.
+
+Main Responsibilities:
+- Accept `.mp4` meeting recordings via `/uploadfile/`.
+- Forward the recording filename to the Preprocessing service (`/preprocess/`) to extract and normalize audio.
+- Send preprocessed audio to the Whisper service (`/whisper/`) for transcription.
+- Pass transcription text to the Summarization service (`/summarization/`) for summarizing the content.
+- Return the final summarized text along with the original filename and processing time to the user.
+
+Supporting Features:
+- `/` (root endpoint): Basic "service is alive" check.
+- `/healthcheck`: Verifies health of all dependent services (preprocess, whisper, summarization).
+- Structured logging for each critical step.
+- Automatic directory creation for uploaded files.
+- Timeout and error handling for external service calls.
+- Environment variables allow flexible endpoint and timeout configuration.
+
+Environment Variables:
+- `BASE_DIR`: Base directory to save uploaded `.mp4` files (default: `/usr/local/app/data/mp4/`).
+- `PREPROCESS_SERVICE_URL`: URL for the preprocessing service.
+- `WHISPER_SERVICE_URL`: URL for the whisper transcription service.
+- `SUMMARIZATION_SERVICE_URL`: URL for the summarization service.
+- `REQUEST_TIMEOUT`: Timeout for requests to external services (default: 1200 seconds / 20 minutes).
+- `PORT`: Port to serve the FastAPI app (default: 8000).
+
+Requirements:
+- Python 3.8+
+- FastAPI
+- Uvicorn
+- httpx
+- pydantic
+
+Notes:
+- Only `.mp4` uploads are currently supported (future enhancement: support `.mp3` too).
+- Services are expected to be accessible via Docker DNS naming.
+
+---
+Written with care. Powered by FastAPI, caffeine, and a healthy fear of missing a timeout.
+"""
+
+
 from fastapi import FastAPI, UploadFile, HTTPException, File
 import uvicorn
 import os
