@@ -25,7 +25,7 @@ Environment Variables:
 - `PORT`: Port to serve the FastAPI app (default: 8001).
 
 Requirements:
-- Python 3.8+
+- Python 3.12+
 - FastAPI
 - Uvicorn
 - FFmpeg installed and accessible in system PATH

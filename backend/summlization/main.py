@@ -30,7 +30,7 @@ Environment Variables:
 - `PORT`: Port to serve the FastAPI app (default: 8003).
 
 Requirements:
-- Python 3.8+
+- Python 3.12+
 - FastAPI
 - Uvicorn
 - httpx
