@@ -81,7 +81,7 @@ services:
     restart: unless-stopped
     networks:
       - meeting_summarization_network
-
+  # TODO: Make Ollama run ollama pull model on startup 
   ollama:
     image: ollama/ollama:latest
     volumes:

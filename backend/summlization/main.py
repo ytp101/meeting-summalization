@@ -161,6 +161,8 @@ async def summarization(filepath: FilePath):
         raise HTTPException(status_code=500, detail=f"Failed to read input file: {str(e)}")
     
     logger.info(f"Content: {input_data}")
+    # TODO: Prepare for more models, now only llama3 is supported
+    # TODO: Rewrite System Prompt to be more flexible
     # Prepare request for Ollama
     request_data = {
         "model": MODEL_ID,

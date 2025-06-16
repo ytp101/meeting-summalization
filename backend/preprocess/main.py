@@ -83,7 +83,6 @@ try:
     logger.info("FFmpeg is available")
 except Exception as e:
     logger.error(f"FFmpeg is not available: {e}")
-    # We'll continue but log the error
 
 # setup title of the service
 app = FastAPI(title="Meeting Audio Preprocessor")
@@ -126,6 +125,7 @@ async def preprocess(filepath: FilePath):
         logger.error(f"Failed to process request: {e}")
         raise HTTPException(status_code=400, detail="Invalid request format")
 
+    # TODO: make it to accept mp3 format
     # construct input file name and output file name (to use in ffmpeg)
     input_file = Path(BASE_DIR_MP4) / f"{request_file_name}.mp4"
     output_file = Path(BASE_DIR_WAV) / f"{request_file_name}.wav"
