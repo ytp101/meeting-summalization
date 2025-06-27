@@ -20,7 +20,10 @@ filename = "/home/yodsran/meeting-summalization/backend/diarization/tests/test_s
 
 waveform, sample_rate = torchaudio.load(filename)
 
-diarization = pipeline(waveform, sample_rate=sample_rate)
+diarization = pipeline({
+        "waveform": waveform,
+        "sample_rate": sample_rate
+    })
 
 with open("/home/yodsran/meeting-summalization/backend/diarization/tests/diarization.rttm", "w") as rttm:
     diarization.write_rttm(rttm)

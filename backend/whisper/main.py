@@ -205,16 +205,35 @@ async def transcribe(filepath: FilePath):
         transcription = model(str(input_file))
         
         with open(output_file, "w", encoding="utf-8") as file_output:
-            # Handle both timestamped and non-timestamped outputs
             if isinstance(transcription, dict) and 'chunks' in transcription:
-                # For timestamped output (chunk output)
-                full_text = ""
-                for chunk in transcription['chunks']:
-                    full_text += chunk['text'] + " "
-                file_output.write(full_text.strip())
+                from collections import defaultdict
+
+                SEGMENT_DURATION = 15.0  # seconds
+                segments_dict = defaultdict(list)
+
+                for chunk in transcription["chunks"]:
+                    start, end = chunk.get("timestamp", [None, None])
+                    text = chunk.get("text", "").strip()
+
+                    if start is None or end is None or not text:
+                        continue
+
+                    bin_index = int(start // SEGMENT_DURATION)
+                    bin_start = bin_index * SEGMENT_DURATION
+                    bin_end = bin_start + SEGMENT_DURATION
+                    segments_dict[(bin_start, bin_end)].append(text)
+
+                sorted_segments = sorted(segments_dict.items(), key=lambda x: x[0][0])
+
+                for idx, ((start, end), texts) in enumerate(sorted_segments, 1):
+                    segment_text = " ".join(texts).strip()
+                    if not segment_text:
+                        continue
+                    file_output.write(f"[{start:.2f} - {end:.2f}] {segment_text}\n")
+
             else:
-                # For regular output
-                file_output.write(transcription['text'])
+                file_output.write(transcription.get("text", ""))
+
         
         elapsed_time = time.time() - start_time
         logger.info(f"Transcription completed in {elapsed_time:.2f} seconds")
