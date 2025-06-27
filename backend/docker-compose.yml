@@ -12,7 +12,7 @@ services:
     environment:
       - PREPROCESS_SERVICE_URL=http://preprocess:8001/preprocess/
       - WHISPER_SERVICE_URL=http://whisper:8002/whisper/
-      - SUMMARIZATION_SERVICE_URL=http://summarization:8003/summarization/
+      - SUMMARIZATION_SERVICE_URL=http://summarization:8004/summarization/
       - TZ=Asia/Bangkok
     restart: unless-stopped
     networks:
@@ -21,6 +21,7 @@ services:
       - preprocess
       - whisper
       - summarization
+      - vad
 
   preprocess:
     build:
@@ -33,6 +34,18 @@ services:
     environment:
       - TZ=Asia/Bangkok
     restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
+  vad:
+    build: ./vad
+    ports:
+      - "8003:8003"
+    volumes:
+      - shared_data:/usr/local/app/data
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - BASE_DIR_WAV=/usr/local/app/data/wav/
     networks:
       - meeting_summarization_network
 
@@ -56,17 +69,21 @@ services:
       - TZ=Asia/Bangkok
       - MODEL_ID=openai/whisper-large-v3-turbo
       - LANGUAGE=th
+      - HF_HOME=/home/app/.cache
+      - VAD_URL=http://vad:8003/vad/
       - NVIDIA_VISIBLE_DEVICES=all
     restart: unless-stopped
     networks:
       - meeting_summarization_network
+    depends_on:
+      - vad
 
   summarization:
     build:
       context: ./summlization
       dockerfile: Dockerfile
     ports:
-      - "8003:8003"
+      - "8004:8003"
     volumes:
       - shared_data:/usr/local/app/data
     environment:
@@ -98,9 +115,9 @@ services:
     environment:
       - OLLAMA_SKIP_GPU_TESTS=false
       - NVIDIA_VISIBLE_DEVICES=all
+    restart: unless-stopped
     networks:
       - meeting_summarization_network
-    restart: unless-stopped
 
 networks:
   meeting_summarization_network:

@@ -7,3 +7,5 @@
 
 # ignore database folder 
 /database
+
+*.wav

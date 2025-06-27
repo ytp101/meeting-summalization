@@ -56,6 +56,9 @@ from fastapi.encoders import jsonable_encoder
 import logging
 from pathlib import Path
 import time
+import requests
+from collections import defaultdict
+import torchaudio
 
 # Configure logging
 logging.basicConfig(
@@ -76,6 +79,7 @@ BASE_DIR_TXT = os.getenv('BASE_DIR_TXT', '/usr/local/app/data/txt/')
 MODEL_ID = os.getenv('MODEL_ID', 'openai/whisper-large-v3-turbo')
 LANGUAGE = os.getenv('LANGUAGE', 'th')
 HF_HOME = os.getenv('HF_HOME', '/home/app/.cache')
+VAD_URL = os.getenv("VAD_URL", "http://vad:8003/vad/") 
 
 # Set HuggingFace cache environment variable
 os.environ['HF_HOME'] = HF_HOME
@@ -116,8 +120,17 @@ def get_whisper_model():
             raise RuntimeError(f"Failed to load Whisper model: {e}")
     return whisper_model
 
+def get_vad_segments(filename: str):
+    try:
+        response = requests.post(VAD_URL, json={"filename": filename})
+        response.raise_for_status()
+        return response.json()["segments"]
+    except Exception as e:
+        logger.error(f"VAD call failed: {e}")
+        raise HTTPException(status_code=500, detail="Failed to call VAD service")
+
+
 # load model on startup 
-# TODO: change on event -> lifespan 
 @app.on_event("startup")
 async def startup_event():
     """Load model on startup"""
@@ -202,38 +215,44 @@ async def transcribe(filepath: FilePath):
     # Perform transcription
     try:
         logger.info(f"Starting transcription of {input_file}")
-        transcription = model(str(input_file))
+        segments = get_vad_segments(input_file_name_request)
+        
+        logger.info(f"Received {len(segments)} segments from VAD")
         
         with open(output_file, "w", encoding="utf-8") as file_output:
-            if isinstance(transcription, dict) and 'chunks' in transcription:
-                from collections import defaultdict
+            waveform, sr = torchaudio.load(str(input_file))
+            segments_dict = defaultdict(list)
+            SEGMENT_DURATION = 15.0
 
-                SEGMENT_DURATION = 15.0  # seconds
-                segments_dict = defaultdict(list)
+            for idx, seg in enumerate(segments):
+                start_sample = int(seg['start'] * sr)
+                end_sample = int(seg['end'] * sr)
+                chunk = waveform[:, start_sample:end_sample]
 
-                for chunk in transcription["chunks"]:
-                    start, end = chunk.get("timestamp", [None, None])
-                    text = chunk.get("text", "").strip()
+                temp_path = f"/tmp/chunk_{idx:03d}.wav"
+                torchaudio.save(temp_path, chunk, sr)
 
-                    if start is None or end is None or not text:
-                        continue
+                result = model(temp_path)
 
-                    bin_index = int(start // SEGMENT_DURATION)
-                    bin_start = bin_index * SEGMENT_DURATION
-                    bin_end = bin_start + SEGMENT_DURATION
-                    segments_dict[(bin_start, bin_end)].append(text)
+                if not result.get("chunks"):
+                    text = result.get("text", "").strip()
+                    if text:
+                        segments_dict[(seg['start'], seg['end'])].append(text)
+                        logger.info(f"Segment {idx}: {seg['start']}–{seg['end']}, text: {text}")
+                else:
+                    for chunk in result["chunks"]:
+                        ts = chunk.get("timestamp", [None, None])
+                        text = chunk.get("text", "").strip()
+                        if ts and text:
+                            bin_index = int(ts[0] // SEGMENT_DURATION)
+                            bin_start = bin_index * SEGMENT_DURATION
+                            bin_end = bin_start + SEGMENT_DURATION
+                            segments_dict[(bin_start, bin_end)].append(text)
+                            logger.info(f"Chunk {ts[0]}–{ts[1]}: {text}")
 
-                sorted_segments = sorted(segments_dict.items(), key=lambda x: x[0][0])
-
-                for idx, ((start, end), texts) in enumerate(sorted_segments, 1):
-                    segment_text = " ".join(texts).strip()
-                    if not segment_text:
-                        continue
-                    file_output.write(f"[{start:.2f} - {end:.2f}] {segment_text}\n")
-
-            else:
-                file_output.write(transcription.get("text", ""))
-
+            for (start, end), texts in sorted(segments_dict.items()):
+                block = f"[{start:.1f}s - {end:.1f}s]: {' '.join(texts)}\n"
+                file_output.write(block)
         
         elapsed_time = time.time() - start_time
         logger.info(f"Transcription completed in {elapsed_time:.2f} seconds")
