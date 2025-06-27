@@ -138,6 +138,7 @@ async def preprocess(filepath: FilePath):
     # Ensure output directory exists
     output_file.parent.mkdir(parents=True, exist_ok=True)
     
+    # ffmpeg -i <input_file> -vn -ar 16000 -ac 1 -c:a pcm_s16le -af loudnorm <output_file>
     # Prepare ffmpeg command
     command = [
         "ffmpeg", "-i", str(input_file),

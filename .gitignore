@@ -1,5 +1,6 @@
 # ignore test folder 
 /test
+/backend/diarization/tests
 
 # ignore cache folder 
 /backend/whisper/cache
