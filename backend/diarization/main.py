@@ -3,7 +3,7 @@ import torch
 import torchaudio
 import os 
 
-HF_TOKEN= "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"
+HF_TOKEN= os.getenv("HF_TOKEN")
 
 pipeline = Pipeline.from_pretrained(
     "pyannote/speaker-diarization-3.1",
