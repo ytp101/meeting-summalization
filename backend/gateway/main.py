@@ -1,4 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
 import httpx, uvicorn, os, time, logging
@@ -21,6 +22,14 @@ for d in (BASE_DIR, WAV_DIR, TXT_DIR):
     d.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Meeting Summarization Gateway")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class ServiceStatus(BaseModel):
     service: str
