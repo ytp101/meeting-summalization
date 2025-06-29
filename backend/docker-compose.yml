@@ -12,8 +12,8 @@ services:
       - shared_data:/usr/local/app/data
     environment:
       PREPROCESS_SERVICE_URL: http://preprocess:8001/preprocess/
-      WHISPER_SERVICE_URL:    http://whisper:8002/whisper/
-      SUMMARIZATION_SERVICE_URL: http://summarization:8003/summarization/
+      WHISPER_SERVICE_URL:    http://whisper:8003/whisper/
+      SUMMARIZATION_SERVICE_URL: http://summarization:8005/summarization/
       DIARIZATION_SERVICE_URL: http://diarization:8004/diarization/
       TZ: Asia/Bangkok
     depends_on:
@@ -94,7 +94,7 @@ services:
       MODEL_ID: openai/whisper-large-v3-turbo
       LANGUAGE: th
       HF_HOME: /home/app/.cache
-      VAD_URL: http://vad:8003/vad/
+      VAD_URL: http://vad:8002/vad/
       NVIDIA_VISIBLE_DEVICES: all
       TZ: Asia/Bangkok
     depends_on:

@@ -120,7 +120,7 @@ def transcribe_file(
         end_idx   = int(t1 * sr)
         chunk_wf  = waveform[:, start_idx:end_idx].mean(dim=0).numpy()
 
-        result = model(chunk_wf, sampling_rate=sr)
+        result = model(chunk_wf)
 
         # 3a) If word-level timestamps available
         if isinstance(result, dict) and result.get("chunks"):
@@ -129,6 +129,12 @@ def transcribe_file(
                 text   = c["text"].strip()
                 if not text: 
                     continue
+
+                if c0 is None: 
+                    continue 
+                if c1 is None: 
+                    c1 = t1
+
                 segments.append(Segment(start=c0, end=c1, text=text))
                 lines.append(f"[{c0:.2f}s - {c1:.2f}s] {text}")
         # 3b) else per-segment

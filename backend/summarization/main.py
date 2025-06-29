@@ -48,6 +48,7 @@ class SummarizationRequest(BaseModel):
     segments: Optional[List[Segment]] = None
 
 class SummarizationResponse(BaseModel):
+    filename: str
     summarization_file_path: str
 
 
@@ -161,7 +162,12 @@ async def summarization(req: SummarizationRequest):
 
     elapsed = time.time() - start_time
     logger.info("Completed in %.2fs", elapsed)
-    return [SummarizationResponse(summarization_file_path=summary_filename)]
+    return [
+        SummarizationResponse(
+            filename=source_id,
+            summarization_file_path=summary_filename
+        )
+    ]
 
 
 # ─── Entrypoint ───────────────────────────────────────────────────────────────

@@ -98,19 +98,21 @@ async def upload_and_process(file: UploadFile = File(...)):
 
         # 4) Whisper → transcription (+ word-level timestamps)
         wr = await call_service(client, "whisper", WHISPER_URL, {"filename": wav_file})
-        transcript_file = wr[0]["transcription_file_path"]
-        # if your whisper now returns segments, override:
-        segments = wr[0].get("segments", segments)
+        transcript_file = wr["transcription_file_path"]
+        segments        = wr.get("segments", [])
 
         # 5) Summarization → final
-        sr = await call_service(client, "summarization", SUMMARIZE_URL, {"segments": segments})
+        sr = await call_service(client, "summarization", SUMMARIZE_URL, {
+            "segments": segments
+        }
+        )
         summary_path = sr[0]["summarization_file_path"]
 
     elapsed = time.time() - start
     logger.info(f"Pipeline done in {elapsed:.1f}s")
 
     # 6) Read back the summary for user
-    summary_file = TXT_DIR / f"{summary_path}.txt"
+    summary_file = TXT_DIR / f"{summary_path}"
     if not summary_file.exists():
         raise HTTPException(500, f"Summary file missing: {summary_file}")
     summary_text = summary_file.read_text(encoding="utf-8")

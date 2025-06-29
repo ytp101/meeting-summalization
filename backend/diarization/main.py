@@ -49,7 +49,7 @@ async def root():
     return {
         "status": "running",
         "model": DIA_MODEL,
-        "device": device
+        "device": str(device)
     }
 
 @app.get("/healthcheck")
@@ -59,7 +59,7 @@ async def healthcheck():
     return JSONResponse({
         "status": "healthy" if is_loaded else "unhealthy",
         "model_loaded": is_loaded,
-        "device": device
+        "device": str(device)
     }, status_code=200 if is_loaded else 503)
 
 # ——— Diarization Endpoint ——————————————————————————————————————————————————————

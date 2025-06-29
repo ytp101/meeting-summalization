@@ -1,5 +1,5 @@
 fastapi
-uvicornx
+uvicorn
 transformers
 torch
 torchaudio
