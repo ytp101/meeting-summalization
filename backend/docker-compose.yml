@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # ───────────── Gateway ─────────────
   gateway:
     build:
       context: ./gateway
@@ -10,19 +11,21 @@ services:
     volumes:
       - shared_data:/usr/local/app/data
     environment:
-      - PREPROCESS_SERVICE_URL=http://preprocess:8001/preprocess/
-      - WHISPER_SERVICE_URL=http://whisper:8002/whisper/
-      - SUMMARIZATION_SERVICE_URL=http://summarization:8004/summarization/
-      - TZ=Asia/Bangkok
+      PREPROCESS_SERVICE_URL: http://preprocess:8001/preprocess/
+      WHISPER_SERVICE_URL:    http://whisper:8002/whisper/
+      SUMMARIZATION_SERVICE_URL: http://summarization:8003/summarization/
+      DIARIZATION_SERVICE_URL: http://diarization:8004/diarization/
+      TZ: Asia/Bangkok
+    depends_on:
+      - preprocess
+      - vad
+      - whisper
+      - summarization
     restart: unless-stopped
     networks:
       - meeting_summarization_network
-    depends_on:
-      - preprocess
-      - whisper
-      - summarization
-      - vad
 
+  # ─────────── Preprocessing ───────────
   preprocess:
     build:
       context: ./preprocess
@@ -32,32 +35,25 @@ services:
     volumes:
       - shared_data:/usr/local/app/data
     environment:
-      - TZ=Asia/Bangkok
+      TZ: Asia/Bangkok
     restart: unless-stopped
     networks:
       - meeting_summarization_network
-
-  vad:
-    build: ./vad
+  # ────────────── Dirization ────────────────
+  diarization:
+    build:
+      context: ./diarization
+      dockerfile: Dockerfile
     ports:
-      - "8003:8003"
+      - "8004:8004"
     volumes:
       - shared_data:/usr/local/app/data
     environment:
-      - HF_TOKEN=${HF_TOKEN}
-      - BASE_DIR_WAV=/usr/local/app/data/wav/
-    networks:
-      - meeting_summarization_network
-
-  whisper:
-    build:
-      context: ./whisper
-      dockerfile: Dockerfile
-    ports:
-      - "8002:8002"
-    volumes:
-      - shared_data:/usr/local/app/data
-      - whisper_cache:/home/app/.cache
+      HF_TOKEN: ${HF_TOKEN}
+      HF_HOME: /home/app/.cache 
+      BASE_DIR_WAV: /usr/local/app/data/wav/
+      TZ: Asia/Bangkok
+    restart: unless-stopped
     deploy:
       resources:
         reservations:
@@ -65,46 +61,87 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    environment:
-      - TZ=Asia/Bangkok
-      - MODEL_ID=openai/whisper-large-v3-turbo
-      - LANGUAGE=th
-      - HF_HOME=/home/app/.cache
-      - VAD_URL=http://vad:8003/vad/
-      - NVIDIA_VISIBLE_DEVICES=all
-    restart: unless-stopped
     networks:
       - meeting_summarization_network
-    depends_on:
-      - vad
-
-  summarization:
+  # ────────────── VAD ────────────────
+  vad:
     build:
-      context: ./summlization
+      context: ./vad
       dockerfile: Dockerfile
     ports:
-      - "8004:8003"
+      - "8002:8002"
     volumes:
       - shared_data:/usr/local/app/data
     environment:
-      - TZ=Asia/Bangkok
-      - MODEL_ID=llama3
-      - OLLAMA_HOST=http://ollama:11434
-      - MAX_TOKENS=4096
-      - TEMPERATURE=0.2
-      - REQUEST_TIMEOUT=600
+      HF_TOKEN: ${HF_TOKEN}
+      BASE_DIR_WAV: /usr/local/app/data/wav/
+      TZ: Asia/Bangkok
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
+  # ───────────── Whisper ──────────────
+  whisper:
+    build:
+      context: ./whisper
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - shared_data:/usr/local/app/data
+      - whisper_cache:/home/app/.cache
+    environment:
+      MODEL_ID: openai/whisper-large-v3-turbo
+      LANGUAGE: th
+      HF_HOME: /home/app/.cache
+      VAD_URL: http://vad:8003/vad/
+      NVIDIA_VISIBLE_DEVICES: all
+      TZ: Asia/Bangkok
+    depends_on:
+      - vad
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
+  # ───────── Summarization ────────────
+  summarization:
+    build:
+      context: ./summarization
+      dockerfile: Dockerfile
+    ports:
+      - "8005:8005"
+    volumes:
+      - shared_data:/usr/local/app/data
+    environment:
+      MODEL_ID: llama3
+      OLLAMA_HOST: http://ollama:11434
+      MAX_TOKENS: 4096
+      TEMPERATURE: 0.2
+      REQUEST_TIMEOUT: 600
+      TZ: Asia/Bangkok
     depends_on:
       - ollama
     restart: unless-stopped
     networks:
       - meeting_summarization_network
 
+  # ───────────── Ollama ──────────────
   ollama:
     image: ollama/ollama:latest
-    volumes:
-      - ollama_data:/root/.ollama
     ports:
       - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      OLLAMA_SKIP_GPU_TESTS: "false"
+      NVIDIA_VISIBLE_DEVICES: all
     deploy:
       resources:
         reservations:
@@ -112,13 +149,11 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    environment:
-      - OLLAMA_SKIP_GPU_TESTS=false
-      - NVIDIA_VISIBLE_DEVICES=all
     restart: unless-stopped
     networks:
       - meeting_summarization_network
 
+# ───────────── Network & Volumes ─────────────
 networks:
   meeting_summarization_network:
     driver: bridge

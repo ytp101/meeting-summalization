@@ -1,38 +1,36 @@
-# Use CUDA base image for GPU support 
+# Use NVIDIA’s CUDA runtime base image for GPU support
 FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
 
-# Set work directory
+# Set a non-root user and working directory
+RUN groupadd -g 1000 appgroup \
+ && useradd -m -u 1000 -g appgroup -s /bin/bash app
 WORKDIR /usr/local/app
 
-# Install system dependencies
-RUN apt-get -y update && apt-get install -y python3-pip && apt-get install -y ffmpeg
+# Install system dependencies in one layer and clean up
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3-pip \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Expose port 8002
-EXPOSE 8002
+# Create application directories and set ownership
+RUN mkdir -p data/wav data/txt \
+ && chown -R app:appgroup .
 
-# Create the app user and add to the appgroup with fixed GID
-RUN groupadd -g 1000 appgroup && \
-    useradd -u 1000 -g appgroup -s /bin/bash app
-
-# Create directories with group write permissions
-RUN mkdir -p /usr/local/app/data/wav /usr/local/app/data/txt && \
-    chown -R app:appgroup /usr/local/app
-
-# make directory for cache 
-RUN mkdir -p /home/app/.cache && \
-    chown -R app:appgroup /home/app/.cache
-
-# Set environment variables for logging and cache
+# Prepare Hugging Face cache dirs
+USER app
 ENV HF_HOME=/home/app/.cache
 ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
+RUN mkdir -p $HF_HOME $TRANSFORMERS_CACHE
 
-# change to app user for running application
-USER app
+# Expose the service port
+EXPOSE 8002
 
-# Copy application code run application 
-COPY main.py ./
-CMD ["python3", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"] 
+# Copy the application code
+COPY --chown=app:appgroup main.py ./
+
+# Run Uvicorn under the non-root user
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003", "--log-level", "info"]

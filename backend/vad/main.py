@@ -1,63 +1,96 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from pyannote.audio import Pipeline
-from fastapi.responses import JSONResponse
 import os
 import logging
+from pathlib import Path
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from pyannote.audio import Pipeline as PyannotePipeline
+
+# ——— Configuration & Logging —————————————————————————————————————————————
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s %(message)s",
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
-logger.info("Starting VAD service")
 
-# Environment variables
 HF_TOKEN = os.getenv("HF_TOKEN")
-BASE_DIR_WAV = os.getenv("BASE_DIR_WAV", "/usr/local/app/data/wav/")
+BASE_DIR_WAV = Path(os.getenv("BASE_DIR_WAV", "/usr/local/app/data/wav/"))
+MODEL_NAME = "pyannote/voice-activity-detection"
 
-# Validate HF Token
-if not HF_TOKEN:
-    raise RuntimeError("HF_TOKEN environment variable is not set.")
-
-# Load the VAD model
-try:
-    logger.info("Loading VAD model from Hugging Face")
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/voice-activity-detection",
-        use_auth_token=HF_TOKEN
-    )
-except Exception as e:
-    logger.error(f"Failed to load VAD model: {e}")
-    raise RuntimeError("VAD model loading failed")
-
-# FastAPI app
+# ——— FastAPI Initialization —————————————————————————————————————————————————
 app = FastAPI(title="Voice Activity Detection (VAD) Service")
 
-# Request model
 class AudioFile(BaseModel):
     filename: str
 
-@app.get("/")
-def root():
-    return {"status": "VAD service running", "model": "pyannote/voice-activity-detection"}
+vad_pipeline: PyannotePipeline | None = None
 
-@app.post("/vad/")
-def vad_segments(file: AudioFile):
-    audio_path = os.path.join(BASE_DIR_WAV, f"{file.filename}.wav")
+# ——— Startup Event: Validate & Load Model ———————————————————————————————————
+@app.on_event("startup")
+def startup_event():
+    global vad_pipeline
+
+    # check HF token
+    if not HF_TOKEN:
+        logger.error("HF_TOKEN environment variable is missing.")
+        raise RuntimeError("HF_TOKEN must be set to load the VAD model.")
     
-    if not os.path.exists(audio_path):
-        logger.warning(f"Audio file not found: {audio_path}")
+    # ensure WAV directory exists
+    BASE_DIR_WAV.mkdir(parents=True, exist_ok=True)
+    logger.info(f"WAV directory: {BASE_DIR_WAV}")
+
+    # load the pyannote VAD pipeline
+    try:
+        logger.info(f"Loading VAD model '{MODEL_NAME}' from Hugging Face…")
+        vad_pipeline = PyannotePipeline.from_pretrained(
+            MODEL_NAME,
+            use_auth_token=HF_TOKEN
+        )
+        logger.info("VAD model loaded successfully.")
+    except Exception:
+        logger.exception("Failed to load VAD model.")
+        raise
+
+# ——— Root & Healthcheck Endpoints ——————————————————————————————————————————
+@app.get("/", tags=["health"])
+def root():
+    return {"status": "running", "model": MODEL_NAME}
+
+@app.get("/healthcheck", tags=["health"])
+def healthcheck():
+    if vad_pipeline is None:
+        return {"status": "unhealthy", "detail": "VAD model not initialized"}
+    if not BASE_DIR_WAV.exists():
+        return {"status": "unhealthy", "detail": f"WAV dir missing: {BASE_DIR_WAV}"}
+    return {"status": "healthy", "model": MODEL_NAME, "wav_dir": str(BASE_DIR_WAV)}
+
+# ——— VAD Endpoint ————————————————————————————————————————————————————————
+@app.post("/vad/", response_model=dict, tags=["inference"])
+def vad_segments(request: AudioFile):
+    if vad_pipeline is None:
+        logger.error("VAD pipeline is not ready.")
+        raise HTTPException(status_code=503, detail="Service unavailable")
+
+    audio_path = BASE_DIR_WAV / f"{request.filename}.wav"
+    if not audio_path.exists():
+        logger.warning(f"Requested file not found: {audio_path}")
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
-        logger.info(f"Running VAD on file: {file.filename}")
-        output = pipeline(audio_path)
+        logger.info(f"Running VAD on '{audio_path.name}'")
+        result = vad_pipeline(str(audio_path))
+
+        # Extract the “speech” segments timeline
+        timeline = result.get_timeline().support()
         segments = [
-            {"start": round(speech.start, 3), "end": round(speech.end, 3)}
-            for speech in output.get_timeline().support()
+            {"start": round(seg.start, 3), "end": round(seg.end, 3)}
+            for seg in timeline
         ]
-        logger.info(f"Detected {len(segments)} segments")
-        return {"segments": segments}
-    
-    except Exception as e:
-        logger.error(f"VAD processing failed: {e}")
+
+        logger.info(f"Detected {len(segments)} speech segments")
+        return JSONResponse(content={"segments": segments})
+
+    except Exception:
+        logger.exception("VAD processing failed")
         raise HTTPException(status_code=500, detail="VAD processing failed")
