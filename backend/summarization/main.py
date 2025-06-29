@@ -70,7 +70,7 @@ def _build_transcript(req: SummarizationRequest) -> (str, str):
             f"[{seg.start:.2f}s–{seg.end:.2f}s] {seg.text.strip()}"
             for seg in req.segments
         )
-        source_id = "inline_segments"
+        source_id = req.filename
     elif req.filename:
         file_path = BASE_DIR_TXT / f"{req.filename}.txt"
         transcript = _read_file_text(file_path)

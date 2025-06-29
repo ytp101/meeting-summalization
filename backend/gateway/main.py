@@ -103,6 +103,7 @@ async def upload_and_process(file: UploadFile = File(...)):
 
         # 5) Summarization → final
         sr = await call_service(client, "summarization", SUMMARIZE_URL, {
+            "filename": wav_file,
             "segments": segments
         }
         )
