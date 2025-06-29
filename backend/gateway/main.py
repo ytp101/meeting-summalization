@@ -1,266 +1,128 @@
-"""
-Gateway Service for Meeting Summarization Pipeline
----------------------------------------------------
-
-This FastAPI service acts as a gateway that orchestrates a multi-stage pipeline for meeting summarization, 
-handling file uploads, preprocessing, transcription, and summarization by communicating with dedicated microservices.
-
-Main Responsibilities:
-- Accept `.mp4` meeting recordings via `/uploadfile/`.
-- Forward the recording filename to the Preprocessing service (`/preprocess/`) to extract and normalize audio.
-- Send preprocessed audio to the Whisper service (`/whisper/`) for transcription.
-- Pass transcription text to the Summarization service (`/summarization/`) for summarizing the content.
-- Return the final summarized text along with the original filename and processing time to the user.
-
-Supporting Features:
-- `/` (root endpoint): Basic "service is alive" check.
-- `/healthcheck`: Verifies health of all dependent services (preprocess, whisper, summarization).
-- Structured logging for each critical step.
-- Automatic directory creation for uploaded files.
-- Timeout and error handling for external service calls.
-- Environment variables allow flexible endpoint and timeout configuration.
-
-Environment Variables:
-- `BASE_DIR`: Base directory to save uploaded `.mp4` files (default: `/usr/local/app/data/mp4/`).
-- `PREPROCESS_SERVICE_URL`: URL for the preprocessing service.
-- `WHISPER_SERVICE_URL`: URL for the whisper transcription service.
-- `SUMMARIZATION_SERVICE_URL`: URL for the summarization service.
-- `REQUEST_TIMEOUT`: Timeout for requests to external services (default: 1200 seconds / 20 minutes).
-- `PORT`: Port to serve the FastAPI app (default: 8000).
-
-Requirements:
-- Python 3.8+
-- FastAPI
-- Uvicorn
-- httpx
-- pydantic
-
-Notes:
-- Only `.mp4` uploads are currently supported (future enhancement: support `.mp3` too).
-- Services are expected to be accessible via Docker DNS naming.
-
----
-Written with care. Powered by FastAPI, caffeine, and a healthy fear of missing a timeout.
-"""
-
-
-from fastapi import FastAPI, UploadFile, HTTPException, File
-import uvicorn
-import os
-import httpx
-from pathlib import Path
-import logging
-import time
-from typing import List, Optional
-import mimetypes
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from pydantic import BaseModel
+from pathlib import Path
+import httpx, uvicorn, os, time, logging
+from typing import Any, Dict, List
 
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    level=logging.INFO,
-    handlers=[logging.StreamHandler()]
-)
+# ——— Logging & Config ——————————————————————————————————————————————————————————
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
-logger.info("Gateway service is starting up")
 
-# Environment variables with defaults
-BASE_DIR = os.getenv('BASE_DIR', '/usr/local/app/data/mp4/')
+BASE_DIR       = Path(os.getenv("BASE_DIR", "/usr/local/app/data/mp4"))
+WAV_DIR        = Path(os.getenv("BASE_DIR_WAV", "/usr/local/app/data/wav"))
+TXT_DIR        = Path(os.getenv("BASE_DIR_TXT", "/usr/local/app/data/txt"))
+PREPROCESS_URL = os.getenv("PREPROCESS_SERVICE_URL", "http://preprocess:8001/preprocess/")
+WHISPER_URL    = os.getenv("WHISPER_SERVICE_URL", "http://whisper:8003/whisper/")
+SUMMARIZE_URL  = os.getenv("SUMMARIZATION_SERVICE_URL", "http://summarization:8005/summarization/")
+DIAR_URL       = os.getenv("DIARIZATION_SERVICE_URL", "http://diarization:8004/diarization/")
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 1200))
 
-# due to dns (docker bridge network) i will auto assign dns by service name
-# endpoint of each service 
-PREPROCESS_ENDPOINT = os.getenv('PREPROCESS_SERVICE_URL', 'http://preprocess:8001/preprocess/')
-WHISPER_ENDPOINT = os.getenv('WHISPER_SERVICE_URL', 'http://whisper:8002/whisper/')
-SUMMARIZATION_ENDPOINT = os.getenv('SUMMARIZATION_SERVICE_URL', 'http://summarization:8003/summarization/')
+for d in (BASE_DIR, WAV_DIR, TXT_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
-# default request timeout (20mins)
-REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT', 1200))
-
-# Create directories if they don't exist (directory for store mp4)
-os.makedirs(BASE_DIR, exist_ok=True)
-
-# Setup FastAPI service
 app = FastAPI(title="Meeting Summarization Gateway")
 
-# define object model for each service status 
 class ServiceStatus(BaseModel):
     service: str
-    status: str
-    message: Optional[str] = None
+    status:  str
+    message: str = ""
 
-# /(root) for peace of mind 
-@app.get("/")
-def running():
-    return {"status": "Gateway service is running"}
+# ——— Helpers ——————————————————————————————————————————————————————————————————
+async def call_service(
+    client: httpx.AsyncClient, 
+    name: str, 
+    url: str, 
+    payload: Dict[str,Any]
+) -> Any:
+    try:
+        logger.info(f"[{name}] → {url} payload={payload}")
+        resp = await client.post(url, json=payload, timeout=REQUEST_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
+    except httpx.HTTPStatusError as e:
+        logger.error(f"[{name}] HTTP {e.response.status_code}: {e.response.text}")
+        raise HTTPException(500, f"{name} failed: {e.response.text}")
+    except httpx.TimeoutException:
+        logger.error(f"[{name}] timed out after {REQUEST_TIMEOUT}s")
+        raise HTTPException(504, f"{name} timed out")
+    except Exception as e:
+        logger.error(f"[{name}] error: {e}")
+        raise HTTPException(500, f"{name} error: {e}")
 
-# /healthcheck endpoint of checking all service (preprocess, whisper, summarization) by each /(root) of each service 
-@app.get("/healthcheck")
+# ——— Healthcheck ——————————————————————————————————————————————————————————————
+@app.get("/", response_model=Dict[str,str])
+def root():
+    return {"status":"gateway running"}
+
+@app.get("/healthcheck", response_model=List[ServiceStatus])
 async def healthcheck():
-    """Check if all services are available"""
-    results = []
-    
+    results: List[ServiceStatus] = []
+    services = [
+        ("preprocess", PREPROCESS_URL.replace("/preprocess/","/")),
+        ("diarization", DIAR_URL.replace("/diarization/","/")),
+        ("whisper", WHISPER_URL.replace("/whisper/","/")),
+        ("summarization", SUMMARIZE_URL.replace("/summarization/","/")),
+    ]
     async with httpx.AsyncClient() as client:
-        for service, url in [
-            # replace endpoint Ex: /preprocess with / for check runing of each service 
-            ("preprocess", PREPROCESS_ENDPOINT.replace("/preprocess/", "/")),
-            ("whisper", WHISPER_ENDPOINT.replace("/whisper/", "/")),
-            ("summarization", SUMMARIZATION_ENDPOINT.replace("/summarization/", "/"))
-        ]:
+        for name, check_url in services:
             try:
-                response = await client.get(url, timeout=5.0)
-                if response.status_code == 200:
-                    results.append(ServiceStatus(service=service, status="up"))
-                else:
-                    results.append(ServiceStatus(
-                        service=service, 
-                        status="error", 
-                        message=f"HTTP {response.status_code}"
-                    ))
+                r = await client.get(check_url, timeout=5.0)
+                status = "up" if r.status_code==200 else f"error {r.status_code}"
             except Exception as e:
-                results.append(ServiceStatus(
-                    service=service, 
-                    status="down", 
-                    message=str(e)
-                ))
-    
+                status = f"down ({e})"
+            results.append(ServiceStatus(service=name, status=status))
     return results
 
-# main purpose of this code /uploadfile/
+# ——— Upload & Orchestration ——————————————————————————————————————————————————
 @app.post("/uploadfile/")
-async def create_upload_file(file: UploadFile = File(...)):
-    """Process an uploaded meeting recording"""
-    # time the process 
-    start_time = time.time()
+async def upload_and_process(file: UploadFile = File(...)):
+    start = time.time()
 
-    # logging file name 
-    logger.info(f"Received file: {file.filename}")
-    
-    # Validate file type (from now support only mp4) 
-    # TODO: make code support mp3 
-    if not file.filename.lower().endswith('.mp4'):
-        logger.error(f"Invalid file type: {file.filename}")
-        raise HTTPException(status_code=400, detail="Only MP4 files are supported")
-    
-    # Step 1: Save uploaded file
-    try:
-        file_path = Path(BASE_DIR) / file.filename
-        
-        # .stem is like get the last part of file path above so it is a [filename.extension]
-        file_name = file_path.stem
-        
-        # save file
-        with open(file_path, "wb") as file_upload:
-            contents = await file.read()
-            file_upload.write(contents)
-        logger.info(f"File saved to {file_path}")
-    except Exception as e:
-        logger.error(f"Failed to save file: {e}")
-        raise HTTPException(status_code=500, detail=f"Gateway failed to save file: {str(e)}")
-    
-    # Step 2: Send to preprocess service (it will access file from /mp4 and save to /wav)
-    # TODO: remodular code to function based
+    # 1) Save MP4
+    if not file.filename.lower().endswith(".mp4"):
+        raise HTTPException(400, "Only .mp4 supported")
+    mp4_path = BASE_DIR / file.filename
+    stem = mp4_path.stem
+    content = await file.read()
+    mp4_path.write_bytes(content)
+    logger.info(f"Saved upload → {mp4_path}")
 
-    # logging file name 
-    logger.info(f"Sending file: {file_name} to preprocess service")
-    try:
-        async with httpx.AsyncClient() as client:
-            preprocess_response = await client.post(
-                PREPROCESS_ENDPOINT,
-                json={"filename": file_name},
-                timeout=REQUEST_TIMEOUT
-            )
-            if preprocess_response.status_code != 200:
-                raise Exception(f"Preprocess returned status {preprocess_response.status_code}")
-        logger.info("Preprocessing completed")
-    except httpx.TimeoutException:
-        logger.error("Preprocessing timed out")
-        raise HTTPException(status_code=504, detail="Preprocessing timed out")
-    except Exception as e:
-        logger.error(f"Preprocessing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Preprocess failed: {str(e)}")
-    
-    # Step 3: Get preprocessed file path 
-    try:
-        preprocessed_file_path = preprocess_response.json()[0]['preprocessd_file_path']
-    except (KeyError, IndexError) as e:
-        logger.error(f"Invalid preprocess response format: {e}")
-        raise HTTPException(status_code=500, detail="Invalid response from preprocess service")
-    
-    # Step 4: Send to whisper service (it will get file from /wav and save to /txt)
-    logger.info(f"Sending file: {preprocessed_file_path} to whisper service")
-    try:
-        async with httpx.AsyncClient() as client:
-            transcription_response = await client.post(
-                WHISPER_ENDPOINT,
-                json={"filename": preprocessed_file_path},
-                timeout=REQUEST_TIMEOUT
-            )
-            if transcription_response.status_code != 200:
-                raise Exception(f"Whisper returned status {transcription_response.status_code}")
-        logger.info("Transcription completed")
-    except httpx.TimeoutException:
-        logger.error("Transcription timed out")
-        raise HTTPException(status_code=504, detail="Transcription timed out")
-    except Exception as e:
-        logger.error(f"Whisper failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Whisper failed: {str(e)}")
-    
-    # Step 5: Get transcription file path
-    try:
-        transcription_file_path = transcription_response.json()[0]['trancription_file_path']
-    except (KeyError, IndexError) as e:
-        logger.error(f"Invalid whisper response format: {e}")
-        raise HTTPException(status_code=500, detail="Invalid response from whisper service")
-    
-    # Step 6: Send to summarization service (it will get /txt and save to /txt but with _summalized)
-    logger.info(f"Sending file: {transcription_file_path} to summarization service")
-    try:
-        async with httpx.AsyncClient() as client:
-            summarization_response = await client.post(
-                SUMMARIZATION_ENDPOINT,
-                json={"filename": transcription_file_path},
-                timeout=REQUEST_TIMEOUT
-            )
-            if summarization_response.status_code != 200:
-                raise Exception(f"Summarization returned status {summarization_response.status_code}")
-        logger.info("Summarization completed")
-    except httpx.TimeoutException:
-        logger.error("Summarization timed out")
-        raise HTTPException(status_code=504, detail="Summarization timed out")
-    except Exception as e:
-        logger.error(f"Summarization failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Summarization failed: {str(e)}")
-    
-    # Step 7: Get summarization file path
-    try:
-        summarization_file_path = summarization_response.json()[0]['summarization_file_path']
-    except (KeyError, IndexError) as e:
-        logger.error(f"Invalid summarization response format: {e}")
-        raise HTTPException(status_code=500, detail="Invalid response from summarization service")
-    
-    logger.info(f"Reading summary file: {summarization_file_path}")
-    
-    # Calculate processing time
-    elapsed_time = time.time() - start_time
-    logger.info(f"Total processing time: {elapsed_time:.2f} seconds")
-    
-    # Step 8: Read the summary file content (to preprare to send to user)
-    try:
-        summary_file = Path('/usr/local/app/data/txt/') / f"{summarization_file_path}.txt"
-        with open(summary_file, "r", encoding="utf-8") as f:
-            summary_content = f.read()
-        logger.info(f"Successfully read summary content ({len(summary_content)} characters)")
-    except Exception as e:
-        logger.error(f"Failed to read summary file: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to read summary file: {str(e)}")
-    
-    # Step 9: Return result(filename, summary, precessing_time in second) to user
+    async with httpx.AsyncClient() as client:
+        # 2) Preprocess → wav
+        pp = await call_service(client, "preprocess", PREPROCESS_URL, {"filename": stem})
+        wav_file = pp[0]["preprocessed_file_path"]
+
+        # 3) Diarization → segments
+        diar = await call_service(client, "diarization", DIAR_URL, {"filename": wav_file})
+        segments = diar.get("segments", [])
+
+        # 4) Whisper → transcription (+ word-level timestamps)
+        wr = await call_service(client, "whisper", WHISPER_URL, {"filename": wav_file})
+        transcript_file = wr["transcription_file_path"]
+        segments        = wr.get("segments", [])
+
+        # 5) Summarization → final
+        sr = await call_service(client, "summarization", SUMMARIZE_URL, {
+            "filename": wav_file,
+            "segments": segments
+        }
+        )
+        summary_path = sr[0]["summarization_file_path"]
+
+    elapsed = time.time() - start
+    logger.info(f"Pipeline done in {elapsed:.1f}s")
+
+    # 6) Read back the summary for user
+    summary_file = TXT_DIR / f"{summary_path}"
+    if not summary_file.exists():
+        raise HTTPException(500, f"Summary file missing: {summary_file}")
+    summary_text = summary_file.read_text(encoding="utf-8")
+
     return {
-        "filename": str(summarization_file_path),
-        "summary": summary_content,
-        "processing_time_seconds": round(elapsed_time, 2)
+        "filename": stem,
+        "summary": summary_text,
+        "processing_time_seconds": round(elapsed,2),
     }
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+if __name__=="__main__":
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT",8000)))

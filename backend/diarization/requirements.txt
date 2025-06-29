@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-transformers
 torch
 torchaudio
-requests
+pyannote.audio

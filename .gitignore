@@ -1,8 +1,12 @@
 # ignore test folder 
 /test
+/backend/diarization/tests
 
 # ignore cache folder 
 /backend/whisper/cache
 
 # ignore database folder 
 /database
+
+*.wav
+*.env
