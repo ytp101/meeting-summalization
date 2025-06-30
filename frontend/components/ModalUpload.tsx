@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { useRouter } from 'next/navigation'
 
 export default function ModalUpload() {
@@ -40,6 +40,7 @@ export default function ModalUpload() {
         <Button variant="default">📤 Upload Meeting</Button>
       </DialogTrigger>
       <DialogContent className="space-y-4">
+        <DialogTitle>Upload MP4 or MP3</DialogTitle>
         <Label htmlFor="file">Choose audio/video file</Label>
         <Input
           id="file"

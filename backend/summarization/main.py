@@ -1,86 +1,42 @@
 import os
 import time
 import logging
+import asyncio
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Dict
 
-import uvicorn
 import httpx
+import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-# ─── CONFIGURATION ────────────────────────────────────────────────────────────
+# ─── Logging & Config ──────────────────────────────────────────────────────────
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
+logger = logging.getLogger("summarization_service")
+logger.info("Starting Summarization Service")
 
-logger = logging.getLogger("summarization")
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO,
-)
-
-BASE_DIR_TXT    = Path(os.getenv("BASE_DIR_TXT", "/usr/local/app/data/txt/"))
-MODEL_ID        = os.getenv("MODEL_ID", "llama3")
-OLLAMA_HOST     = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-SYSTEM_PROMPT   = os.getenv(
-    "SYSTEM_PROMPT",
-    "Summarize the following meeting transcript. "
-    "Focus on key decisions, action items, and important discussions. "
-    "Make the summary concise yet comprehensive."
-)
-MAX_TOKENS      = int(os.getenv("MAX_TOKENS", 4096))
-TEMPERATURE     = float(os.getenv("TEMPERATURE", 0.2))
-REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 300))  # seconds
-
-BASE_DIR_TXT.mkdir(parents=True, exist_ok=True)
-
+# ─── FastAPI setup ─────────────────────────────────────────────────────────────
 app = FastAPI(title="Meeting Summarization Service")
 
+# ─── Environment & Model Config ─────────────────────────────────────────────────
+OLLAMA_HOST    = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+MODEL_ID       = os.getenv("MODEL_ID", "llama3")
+SYSTEM_PROMPT  = os.getenv("SYSTEM_PROMPT", "Summarize the following transcript in a concise, structured format.")
+MAX_TOKENS     = int(os.getenv("MAX_TOKENS", 4096))
+TEMPERATURE    = float(os.getenv("TEMPERATURE", 0.2))
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 300))
 
-# ─── Pydantic Models ──────────────────────────────────────────────────────────
+# ─── Pydantic Schemas ───────────────────────────────────────────────────────────
+class SummarizeRequest(BaseModel):
+    transcript_path: str        # full path to transcript .txt file
+    output_dir: str
 
-class Segment(BaseModel):
-    start: float
-    end:   float
-    text:  str
+class SummarizeResponse(BaseModel):
+    summary_path: str      # filename of summary file (in output_dir)
 
-class SummarizationRequest(BaseModel):
-    filename: Optional[str] = None
-    segments: Optional[List[Segment]] = None
-
-class SummarizationResponse(BaseModel):
-    filename: str
-    summarization_file_path: str
-
-
-# ─── Helpers ──────────────────────────────────────────────────────────────────
-
-def _read_file_text(path: Path) -> str:
-    if not path.exists():
-        logger.error("File not found: %s", path)
-        raise HTTPException(status_code=404, detail="File not found")
-    text = path.read_text(encoding="utf-8").strip()
-    if not text:
-        logger.error("File is empty: %s", path)
-        raise HTTPException(status_code=400, detail="File is empty")
-    return text
-
-def _build_transcript(req: SummarizationRequest) -> (str, str):
-    if req.segments:
-        transcript = "\n".join(
-            f"[{seg.start:.2f}s–{seg.end:.2f}s] {seg.text.strip()}"
-            for seg in req.segments
-        )
-        source_id = req.filename
-    elif req.filename:
-        file_path = BASE_DIR_TXT / f"{req.filename}.txt"
-        transcript = _read_file_text(file_path)
-        source_id = req.filename
-    else:
-        logger.error("No filename or segments provided")
-        raise HTTPException(status_code=400, detail="Must supply `filename` or `segments`")
-    return transcript, source_id
-
-async def _call_ollama(transcript: str) -> str:
+# ─── Helpers ───────────────────────────────────────────────────────────────────
+async def call_ollama(transcript: str) -> str:
     payload = {
         "model": MODEL_ID,
         "prompt": f"{SYSTEM_PROMPT}\n\n{transcript}",
@@ -98,21 +54,14 @@ async def _call_ollama(transcript: str) -> str:
         logger.error("Ollama error %d: %s", resp.status_code, resp.text)
         raise HTTPException(status_code=500, detail="Ollama API error")
     data = resp.json()
-    # support both v1 ("response") and v0 ("choices")
     return data.get("response") or (data.get("choices") or [{}])[0].get("text", "")
 
-def _write_text_file(path: Path, content: str) -> None:
-    path.write_text(content, encoding="utf-8")
-    logger.info("Wrote: %s", path)
-
-
-# ─── Routes ───────────────────────────────────────────────────────────────────
-
-@app.get("/")
+# ─── Routes ────────────────────────────────────────────────────────────────────
+@app.get("/", summary="Liveness check")
 def root():
-    return {"status": "Summarization service is running"}
+    return {"status": "summarization running", "model": MODEL_ID}
 
-@app.get("/healthcheck")
+@app.get("/healthcheck", summary="Model health check")
 async def healthcheck():
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
@@ -120,57 +69,47 @@ async def healthcheck():
         if resp.status_code != 200:
             return {"status": "degraded", "ollama": f"error {resp.status_code}"}
         models = resp.json().get("models", [])
-        if any(m["name"] == MODEL_ID for m in models):
-            return {"status": "healthy", "ollama": "available", "model": MODEL_ID}
-        return {
-            "status": "degraded",
-            "ollama": "available",
-            "model": "not found",
-            "available_models": [m["name"] for m in models]
-        }
+        ok = any(m.get("name") == MODEL_ID for m in models)
+        return {"status": "healthy" if ok else "degraded", "model": MODEL_ID}
     except Exception as e:
         logger.exception("Healthcheck failed")
         return {"status": "unhealthy", "error": str(e)}
 
 @app.post(
     "/summarization/",
-    response_model=List[SummarizationResponse],
-    responses={400: {"description": "Bad Request"},
-               404: {"description": "Not Found"},
-               500: {"description": "Internal Error"},
-               504: {"description": "Gateway Timeout"}}
+    response_model=SummarizeResponse,
+    summary="Summarize a transcript file"
 )
-async def summarization(req: SummarizationRequest):
-    start_time = time.time()
-    logger.info("Request: %s", req.json())
+async def summarize(req: SummarizeRequest):
+    start = time.time()
+    input_file = Path(req.transcript_path)
+    if not input_file.exists():
+        logger.error("Transcript not found: %s", input_file)
+        raise HTTPException(status_code=404, detail="Transcript file not found")
 
-    # 1) Build transcript & write inspected copy
-    transcript, source_id = _build_transcript(req)
-    inspect_path = BASE_DIR_TXT / f"{source_id}_inspected.txt"
-    _write_text_file(inspect_path, transcript)
+    transcript = input_file.read_text(encoding="utf-8").strip()
+    if not transcript:
+        logger.error("Transcript is empty: %s", input_file)
+        raise HTTPException(status_code=400, detail="Transcript is empty")
 
-    # 2) Summarize
-    summary = await _call_ollama(transcript)
-    if not summary.strip():
+    # 1) Generate summary via Ollama
+    summary_text = await call_ollama(transcript)
+    if not summary_text.strip():
         logger.error("Empty summary returned")
         raise HTTPException(status_code=500, detail="Empty summary from model")
 
-    # 3) Save summary
-    summary_filename = f"{source_id}_summarized.txt"
-    summary_path = BASE_DIR_TXT / summary_filename
-    _write_text_file(summary_path, summary)
+    # 2) Write summary file
+    out_dir = Path(req.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary_file = f"{input_file.stem}_summary.txt"
+    summary_path = out_dir / summary_file
+    summary_path.write_text(summary_text, encoding="utf-8")
+    logger.info("Wrote summary: %s", summary_path)
 
-    elapsed = time.time() - start_time
-    logger.info("Completed in %.2fs", elapsed)
-    return [
-        SummarizationResponse(
-            filename=source_id,
-            summarization_file_path=summary_filename
-        )
-    ]
+    elapsed = time.time() - start
+    logger.info("Summarization completed in %.2fs", elapsed)
+    return SummarizeResponse(summary_path=str(summary_path))
 
-
-# ─── Entrypoint ───────────────────────────────────────────────────────────────
-
+# ─── Entrypoint ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8005)))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8005)), log_level="info")

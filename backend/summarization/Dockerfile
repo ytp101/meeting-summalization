@@ -1,36 +1,42 @@
-# Use a minimal Python image for small footprint
+# syntax=docker/dockerfile:1
+
+# ─── Base Image ────────────────────────────────────────────────────────────────
 FROM python:3.12.10-slim
 
-# Ensure stdout/stderr are unbuffered (easier logging)
-ENV PYTHONUNBUFFERED=1
+# ─── Environment Settings ─────────────────────────────────────────────────────────
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# Install any OS-level dependencies (none special for gateway)
+# ─── System Dependencies ─────────────────────────────────────────────────────────
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /usr/local/app
+# ─── Set Working Directory ───────────────────────────────────────────────────────
+WORKDIR /usr/src/app
 
-# Copy & install Python dependencies
+# ─── Non-Root User Setup ─────────────────────────────────────────────────────────
+RUN groupadd -g 1000 appgroup \
+    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin app
+
+# ─── Install Python Dependencies ─────────────────────────────────────────────────
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose the port the app will run on
-EXPOSE 8004
+# ─── Copy Application Code ───────────────────────────────────────────────────────
+COPY --chown=app:appgroup . .
 
-# Create a non-root user & group
-RUN groupadd -g 1000 appgroup \
- && useradd -u 1000 -g appgroup -s /usr/sbin/nologin app \
- # Create application data dirs and give ownership to `app`
- && mkdir -p data/mp4 data/txt \
- && chown -R app:appgroup /usr/local/app
+# ─── Prepare Data Volume Directories ─────────────────────────────────────────────
+# Mount /data for transcript and summary files
+RUN mkdir -p /data/transcript /data/summary \
+    && chown -R app:appgroup /data
 
-# Switch to the unprivileged user
+# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
 USER app
 
-# Copy application code in
-COPY main.py ./
+# ─── Expose Service Port ─────────────────────────────────────────────────────────
+EXPOSE 8005
 
-# Start the application
+# ─── Entrypoint ─────────────────────────────────────────────────────────────────
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005"]

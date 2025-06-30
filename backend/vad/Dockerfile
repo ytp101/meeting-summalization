@@ -1,28 +1,47 @@
-# Use a slim Python base image
+# syntax=docker/dockerfile:1
+
+# ─── Base Image ────────────────────────────────────────────────────────────────
+# Use a slim Python image for minimal footprint
 FROM python:3.12-slim
 
-# Install system dependencies (ffmpeg for audio I/O, git for HF models, and cleanup)
+# ─── Environment Configuration ───────────────────────────────────────────────────
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# ─── System Dependencies ─────────────────────────────────────────────────────────
+# Install ffmpeg for audio I/O, git for model downloads, libsndfile for audio
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       ffmpeg \
-       git \
+        ffmpeg \
+        git \
+        libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
-WORKDIR /usr/local/app
+# ─── Create Non-Root User & Group ────────────────────────────────────────────────
+RUN groupadd -g 1000 appgroup \
+    && useradd -m -u 1000 -g appgroup -s /usr/sbin/nologin app
 
-# Copy and install Python dependencies
-COPY requirements.txt .
+# ─── Prepare Data & Cache Directories (root) ──────────────────────────────────────
+# Create /data for WAV inputs and Hugging Face cache dirs
+RUN mkdir -p /data/wav /home/app/.cache/huggingface \
+    && chown -R app:appgroup /data /home/app/.cache
+
+# ─── Switch to Non-Root User & Set Working Directory ─────────────────────────────
+USER app
+WORKDIR /home/app/workdir
+
+# Ensure user-local scripts are on PATH
+ENV PATH="/home/app/.local/bin:$PATH"
+
+# ─── Install Python Dependencies ─────────────────────────────────────────────────
+COPY --chown=app:appgroup requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# ─── Copy Application Code ───────────────────────────────────────────────────────
+COPY --chown=app:appgroup . .
 
-# Expose the port the service will run on
-EXPOSE 8003
+# ─── Expose Service Port ─────────────────────────────────────────────────────────
+EXPOSE 8002
 
-# Ensure HF_TOKEN is provided at runtime
-ENV HF_TOKEN=""
-
-# Run the FastAPI app with Uvicorn
+# ─── Entrypoint ─────────────────────────────────────────────────────────────────
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

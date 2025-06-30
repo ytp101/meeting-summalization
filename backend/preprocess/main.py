@@ -17,28 +17,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Directories
-BASE_DIR_MP4 = Path(os.getenv("BASE_DIR_MP4", "/usr/local/app/data/mp4"))
-BASE_DIR_WAV = Path(os.getenv("BASE_DIR_WAV", "/usr/local/app/data/wav"))
-# FFmpeg timeout
-FFMPEG_TIMEOUT = int(os.getenv("FFMPEG_TIMEOUT", 600))  # seconds
-
-# Make sure dirs exist
-for d in (BASE_DIR_MP4, BASE_DIR_WAV):
-    d.mkdir(parents=True, exist_ok=True)
-
 # FastAPI app
 app = FastAPI(title="Meeting Audio Preprocessor")
 
+# Timeout for ffmpeg operations (seconds)
+FFMPEG_TIMEOUT = int(os.getenv("FFMPEG_TIMEOUT", 600))
 
-# ——— Pydantic Model ————————————————————————————————————————————————
-class FilePath(BaseModel):
-    filename: str
-
+# ——— Pydantic Model for Input ————————————————————————————————————————————————
+class PreprocessRequest(BaseModel):
+    input_path: str  # Full path to the source media file
+    output_dir: str  # Directory where the WAV should be written
 
 # ——— FFmpeg Helpers ————————————————————————————————————————————————
 async def _ffmpeg_available() -> bool:
-    """Quickly check if `ffmpeg` is on PATH by invoking `ffmpeg -version`."""
     proc = await asyncio.create_subprocess_exec(
         "ffmpeg", "-version",
         stdout=asyncio.subprocess.DEVNULL,
@@ -47,99 +38,84 @@ async def _ffmpeg_available() -> bool:
     await proc.wait()
     return proc.returncode == 0
 
-
 async def run_ffmpeg(input_file: Path, output_file: Path) -> None:
     """
-    Run ffmpeg to convert <input_file> → <output_file>:
-      - drop video
+    Convert input_file to output_file with:
+      - audio only (drop video)
       - 16 kHz mono 16-bit PCM
       - loudness normalization
-    Raises HTTPException on any failure or timeout.
+    Raises HTTPException on failure or timeout.
     """
     cmd = [
         "ffmpeg", "-y", "-i", str(input_file),
-        "-vn",                         # no video
-        "-ar", "16000",                # 16 kHz sample rate
-        "-ac", "1",                    # mono
-        "-c:a", "pcm_s16le",           # 16-bit PCM
-        "-af", "loudnorm",             # normalize volume
+        "-vn",              # no video
+        "-ar", "16000",   # sample rate
+        "-ac", "1",       # mono
+        "-c:a", "pcm_s16le",  # PCM 16-bit
+        "-af", "loudnorm",     # normalize volume
         str(output_file)
     ]
-    logger.info(f"FFmpeg command: {' '.join(cmd)}")
+    logger.info(f"Running FFmpeg: {' '.join(cmd)}")
 
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=FFMPEG_TIMEOUT)
-
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=FFMPEG_TIMEOUT
+        )
         if proc.returncode != 0:
-            err = stderr.decode(errors="ignore")
-            logger.error(f"FFmpeg failed (code {proc.returncode}): {err.strip()}")
-            raise HTTPException(500, f"FFmpeg processing failed: {err.splitlines()[-1]}")
+            error_msg = stderr.decode(errors="ignore").strip().splitlines()[-1]
+            logger.error(f"FFmpeg error [{proc.returncode}]: {error_msg}")
+            raise HTTPException(500, f"FFmpeg failed: {error_msg}")
     except asyncio.TimeoutError:
         logger.error(f"FFmpeg timed out after {FFMPEG_TIMEOUT}s")
         proc.kill()
         raise HTTPException(504, f"FFmpeg timed out after {FFMPEG_TIMEOUT}s")
 
-
-# ——— Startup & Health ——————————————————————————————————————————————
+# ——— Startup & Health ————————————————————————————————————————————————
 @app.on_event("startup")
 async def on_startup():
-    logger.info("Preprocess service starting up")
-    if not await _ffmpeg_available():
-        logger.error("`ffmpeg` not found on PATH — service will fail")
+    if await _ffmpeg_available():
+        logger.info("FFmpeg is available")
     else:
-        logger.info("`ffmpeg` is available")
+        logger.error("FFmpeg not found on PATH — service may fail")
 
-
-@app.get("/", summary="Basic liveness check")
+@app.get("/", summary="Liveness check")
 def root():
-    return {"status": "Preprocess service is running"}
+    return {"status": "preprocess running"}
 
-
-@app.get("/healthcheck", summary="Dependency healthcheck")
+@app.get("/healthcheck", summary="Dependency health check")
 async def healthcheck():
     ok = await _ffmpeg_available()
-    status = "healthy" if ok else "unhealthy"
-    return {"status": status, "ffmpeg": "available" if ok else "unavailable"}
+    return {"status": "healthy" if ok else "unhealthy"}
 
-
-# ——— Main Preprocess Endpoint —————————————————————————————————————
-@app.post(
-    "/preprocess/",
-    summary="Convert an MP4 (in BASE_DIR_MP4) to a normalized WAV (in BASE_DIR_WAV)",
-)
-async def preprocess(fp: FilePath):
-    # Validate input filename
-    name = fp.filename
-    in_mp4 = BASE_DIR_MP4 / f"{name}.mp4"
-    out_wav = BASE_DIR_WAV / f"{name}.wav"
-
-    logger.info(f"Preprocessing request for `{name}.mp4`")
-
-    if not in_mp4.exists():
-        logger.error(f"Input MP4 not found: {in_mp4}")
+# ——— Preprocess Endpoint ———————————————————————————————————————————————
+@app.post("/preprocess/", summary="Convert audio/video to normalized WAV")
+async def preprocess(req: PreprocessRequest):
+    # Validate input path
+    input_path = Path(req.input_path)
+    if not input_path.exists():
+        logger.error(f"Input file not found: {input_path}")
         raise HTTPException(404, "Input file not found")
 
-    # Ensure output directory exists
-    out_wav.parent.mkdir(parents=True, exist_ok=True)
+    # Prepare output
+    output_dir = Path(req.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / f"{input_path.stem}.wav"
 
-    # Run the conversion
-    await run_ffmpeg(in_mp4, out_wav)
+    # Run conversion
+    await run_ffmpeg(input_path, output_file)
 
-    # Final sanity check
-    if not out_wav.exists():
-        logger.error(f"WAV not produced: {out_wav}")
+    if not output_file.exists():
+        logger.error(f"WAV not produced: {output_file}")
         raise HTTPException(500, "Failed to produce WAV file")
 
-    logger.info(f"Produced WAV → {out_wav}")
-    # Return the _stem_ only, for downstream services
-    response = [{"preprocessed_file_path": name}]
+    logger.info(f"Produced WAV: {output_file}")
+    response = [{"preprocessed_file_path": str(output_file)}]
     return JSONResponse(content=jsonable_encoder(response))
 
-
-# ——— Serve ————————————————————————————————————————————————————————
+# ——— Serve ———————————————————————————————————————————————————————
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
