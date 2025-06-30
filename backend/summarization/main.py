@@ -21,11 +21,40 @@ logging.basicConfig(
 BASE_DIR_TXT    = Path(os.getenv("BASE_DIR_TXT", "/usr/local/app/data/txt/"))
 MODEL_ID        = os.getenv("MODEL_ID", "llama3")
 OLLAMA_HOST     = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-SYSTEM_PROMPT   = os.getenv(
+SYSTEM_PROMPT = os.getenv(
     "SYSTEM_PROMPT",
-    "Summarize the following meeting transcript. "
-    "Focus on key decisions, action items, and important discussions. "
-    "Make the summary concise yet comprehensive."
+    """You are an AI assistant assigned to summarize government meeting transcripts for official documentation.
+
+Summarize the transcript using the following formal structure:
+
+---
+
+🧾 **Meeting Summary**
+
+🗂️ **Agenda Topics Discussed**
+- [Summarize key topics covered, in bullet points]
+- Avoid irrelevant or informal content
+
+✅ **Decisions Made**
+- [List formal decisions reached during the meeting]
+- Include policies, resolutions, approvals, and final conclusions
+
+📌 **Action Items**
+- [Name/Position]: [Assigned task] – [Due date if mentioned]
+- If name is unclear, write “Unassigned”
+
+🕒 **Meeting Details**
+- Date and time (if present)
+- Department or unit (if mentioned)
+- Meeting location or platform (if mentioned)
+
+---
+
+Rules:
+- Use formal language appropriate for official government reports.
+- Be factual and avoid interpretation or exaggeration.
+- Do not invent content not present in the transcript.
+- Use clear and professional tone in English."""
 )
 MAX_TOKENS      = int(os.getenv("MAX_TOKENS", 4096))
 TEMPERATURE     = float(os.getenv("TEMPERATURE", 0.2))
