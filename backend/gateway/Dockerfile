@@ -1,32 +1,34 @@
-# use python 3.12.10-slim for small size image 
+# syntax=docker/dockerfile:1
+
 FROM python:3.12.10-slim
 
-# update system
-RUN apt-get -y update
+# ─── System Dependencies ─────────────────────────────────────────────────────────
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# set work directory
-WORKDIR /usr/local/app
+# ─── Set Working Directory ───────────────────────────────────────────────────────
+WORKDIR /usr/src/app
 
-# copy requirement file for gateway image 
+# ─── Non-Root User Setup ─────────────────────────────────────────────────────────
+RUN groupadd -g 1000 appgroup \
+    && useradd -u 1000 -g appgroup -s /bin/bash app
+
+# ─── Install Python Dependencies ─────────────────────────────────────────────────
 COPY requirements.txt ./
-
-# use pip to install libraries acccorind to requirement file
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port 8000 (prepare for frontend request (8000))
-EXPOSE 8000
+# ─── Copy Application Code ───────────────────────────────────────────────────────
+COPY --chown=app:appgroup . .
 
-# Create the app user and add to the appgroup with fixed GID
-RUN groupadd -g 1000 appgroup && \
-    useradd -u 1000 -g appgroup -s /bin/bash app
+# ─── Prepare Persistent Data Directories ─────────────────────────────────────────
+RUN mkdir -p /data/raw /data/converted /data/transcript /data/summary \
+    && chown -R app:appgroup /data
 
-# Create directories with group write permissions
-RUN mkdir -p /usr/local/app/data/mp4 /usr/local/app/data/txt && \
-    chown -R app:appgroup /usr/local/app
-
-# change to app user for run application
+# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
 USER app
 
-# copy application file & run application 
-COPY main.py ./
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+# ─── Port & Entrypoint ───────────────────────────────────────────────────────────
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

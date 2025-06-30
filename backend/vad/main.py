@@ -1,5 +1,6 @@
 import os
 import logging
+import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -7,90 +8,79 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from pyannote.audio import Pipeline as PyannotePipeline
 
-# ——— Configuration & Logging —————————————————————————————————————————————
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s %(message)s",
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+# ─── Logging & Configuration ─────────────────────────────────────────────────────
+logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
+logger = logging.getLogger("vad_service")
 
-HF_TOKEN = os.getenv("HF_TOKEN")
-BASE_DIR_WAV = Path(os.getenv("BASE_DIR_WAV", "/usr/local/app/data/wav/"))
-MODEL_NAME = "pyannote/voice-activity-detection"
+HF_TOKEN   = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    logger.error("HF_TOKEN environment variable is missing.")
+    raise RuntimeError("HF_TOKEN must be set to load the VAD model.")
 
-# ——— FastAPI Initialization —————————————————————————————————————————————————
-app = FastAPI(title="Voice Activity Detection (VAD) Service")
+# ─── FastAPI Initialization ───────────────────────────────────────────────────────
+app = FastAPI(title="Voice Activity Detection Service")
 
-class AudioFile(BaseModel):
-    filename: str
+# ─── Pydantic Schemas ─────────────────────────────────────────────────────────────
+class VADRequest(BaseModel):
+    input_path: str  # full path to .wav file
 
-vad_pipeline: PyannotePipeline | None = None
+class Segment(BaseModel):
+    start: float
+    end: float
 
-# ——— Startup Event: Validate & Load Model ———————————————————————————————————
+class VADResponse(BaseModel):
+    segments: list[Segment]
+
+# ─── Model Loader ─────────────────────────────────────────────────────────────────
+ad_global: PyannotePipeline | None = None
+
 @app.on_event("startup")
-def startup_event():
+async def load_vad_model():
     global vad_pipeline
+    logger.info("Loading VAD model 'pyannote/voice-activity-detection'")
+    vad_pipeline = await asyncio.to_thread(
+        PyannotePipeline.from_pretrained,
+        "pyannote/voice-activity-detection",
+        use_auth_token=HF_TOKEN
+    )
+    logger.info("VAD model loaded successfully")
 
-    # check HF token
-    if not HF_TOKEN:
-        logger.error("HF_TOKEN environment variable is missing.")
-        raise RuntimeError("HF_TOKEN must be set to load the VAD model.")
-    
-    # ensure WAV directory exists
-    BASE_DIR_WAV.mkdir(parents=True, exist_ok=True)
-    logger.info(f"WAV directory: {BASE_DIR_WAV}")
-
-    # load the pyannote VAD pipeline
-    try:
-        logger.info(f"Loading VAD model '{MODEL_NAME}' from Hugging Face…")
-        vad_pipeline = PyannotePipeline.from_pretrained(
-            MODEL_NAME,
-            use_auth_token=HF_TOKEN
-        )
-        logger.info("VAD model loaded successfully.")
-    except Exception:
-        logger.exception("Failed to load VAD model.")
-        raise
-
-# ——— Root & Healthcheck Endpoints ——————————————————————————————————————————
+# ─── Health Endpoints ─────────────────────────────────────────────────────────────
 @app.get("/", tags=["health"])
 def root():
-    return {"status": "running", "model": MODEL_NAME}
+    return {"status": "running"}
 
 @app.get("/healthcheck", tags=["health"])
 def healthcheck():
-    if vad_pipeline is None:
-        return {"status": "unhealthy", "detail": "VAD model not initialized"}
-    if not BASE_DIR_WAV.exists():
-        return {"status": "unhealthy", "detail": f"WAV dir missing: {BASE_DIR_WAV}"}
-    return {"status": "healthy", "model": MODEL_NAME, "wav_dir": str(BASE_DIR_WAV)}
+    ready = vad_pipeline is not None
+    return {"status": "healthy" if ready else "unhealthy", "model_loaded": ready}
 
-# ——— VAD Endpoint ————————————————————————————————————————————————————————
-@app.post("/vad/", response_model=dict, tags=["inference"])
-def vad_segments(request: AudioFile):
+# ─── VAD Inference Endpoint ───────────────────────────────────────────────────────
+@app.post("/vad/", response_model=VADResponse, tags=["inference"])
+async def vad_segments(req: VADRequest):
     if vad_pipeline is None:
-        logger.error("VAD pipeline is not ready.")
+        logger.error("VAD pipeline unavailable")
         raise HTTPException(status_code=503, detail="Service unavailable")
 
-    audio_path = BASE_DIR_WAV / f"{request.filename}.wav"
-    if not audio_path.exists():
-        logger.warning(f"Requested file not found: {audio_path}")
+    wav_path = Path(req.input_path)
+    if not wav_path.is_file():
+        logger.warning(f"WAV file not found: {wav_path}")
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
-        logger.info(f"Running VAD on '{audio_path.name}'")
-        result = vad_pipeline(str(audio_path))
-
-        # Extract the “speech” segments timeline
-        timeline = result.get_timeline().support()
-        segments = [
-            {"start": round(seg.start, 3), "end": round(seg.end, 3)}
-            for seg in timeline
-        ]
-
-        logger.info(f"Detected {len(segments)} speech segments")
-        return JSONResponse(content={"segments": segments})
-
-    except Exception:
+        # Run pipeline off main thread
+        result = await asyncio.to_thread(vad_pipeline, str(wav_path))
+    except Exception as e:
         logger.exception("VAD processing failed")
-        raise HTTPException(status_code=500, detail="VAD processing failed")
+        raise HTTPException(status_code=500, detail="VAD processing error")
+
+    timeline = result.get_timeline().support()
+    segments = [Segment(start=round(seg.start,3), end=round(seg.end,3)) for seg in timeline]
+    logger.info(f"Detected {len(segments)} segments")
+
+    return JSONResponse(content={"segments": [s.dict() for s in segments]})
+
+# ─── Serve ───────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8002)), log_level="info")

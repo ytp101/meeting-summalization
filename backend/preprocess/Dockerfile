@@ -1,45 +1,40 @@
-# Use official slim Python base
+# syntax=docker/dockerfile:1
+
+# ─── Base Image ────────────────────────────────────────────────────────────────
 FROM python:3.12.10-slim
 
-# --------------------
-# 1. Environment
-# --------------------
+# ─── Environment Settings ─────────────────────────────────────────────────────────
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-WORKDIR /usr/local/app
+# ─── Working Directory ───────────────────────────────────────────────────────────
+WORKDIR /usr/src/app
 
-# --------------------
-# 2. System deps
-# --------------------
+# ─── System Dependencies ─────────────────────────────────────────────────────────
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       ffmpeg \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# --------------------
-# 3. Python deps
-# --------------------
+# ─── Non-Root User Setup ─────────────────────────────────────────────────────────
+RUN groupadd -g 1000 appgroup \
+    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin app
+
+# ─── Python Dependencies ─────────────────────────────────────────────────────────
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --------------------
-# 4. App user & dirs
-# --------------------
-RUN groupadd -g 1000 appgroup \
-    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin app \
-    && mkdir -p data/mp4 data/wav \
-    && chown -R app:appgroup /usr/local/app
-
-USER app
-
-# --------------------
-# 5. Copy application
-# --------------------
+# ─── Copy Application Code ───────────────────────────────────────────────────────
 COPY --chown=app:appgroup . .
 
-# --------------------
-# 6. Expose & run
-# --------------------
+# ─── Data Directories ────────────────────────────────────────────────────────────
+# Ensure directories for raw and converted media exist under /data (Docker volume)
+RUN mkdir -p /data/raw /data/converted \
+    && chown -R app:appgroup /data
+
+# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
+USER app
+
+# ─── Expose Port & Entrypoint ────────────────────────────────────────────────────
 EXPOSE 8001
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]

@@ -1,36 +1,48 @@
-# Use NVIDIA’s CUDA runtime base image for GPU support
-FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04
+# syntax=docker/dockerfile:1
 
-# Set a non-root user and working directory
-RUN groupadd -g 1000 appgroup \
- && useradd -m -u 1000 -g appgroup -s /bin/bash app
-WORKDIR /usr/local/app
+# ─── Base Image ────────────────────────────────────────────────────────────────
+FROM python:3.12-slim
 
-# Install system dependencies in one layer and clean up
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3-pip \
+# ─── Environment Settings ─────────────────────────────────────────────────────────
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# ─── Install System Dependencies ─────────────────────────────────────────────────
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         ffmpeg \
+        git \
+        libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy and install Python dependencies
-COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+# ─── Create Non-Root User & Working Directory ─────────────────────────────────────
+RUN groupadd -g 1000 appgroup \
+    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin -m app
+WORKDIR /usr/src/app
 
-# Create application directories and set ownership
-RUN mkdir -p data/wav data/txt \
- && chown -R app:appgroup .
+# ─── Install Python Dependencies ─────────────────────────────────────────────────
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Prepare Hugging Face cache dirs
-USER app
+# ─── Copy Application Code ───────────────────────────────────────────────────────
+COPY --chown=app:appgroup . .
+
+# ─── Prepare Data Volume Directories ─────────────────────────────────────────────
+# Mount /data as a Docker volume for input and transcript files
+RUN mkdir -p /data/wav /data/transcript \
+    && chown -R app:appgroup /data
+
+# ─── Configure Hugging Face Caches ────────────────────────────────────────────────
 ENV HF_HOME=/home/app/.cache
 ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
-RUN mkdir -p $HF_HOME $TRANSFORMERS_CACHE
+RUN mkdir -p $HF_HOME $TRANSFORMERS_CACHE \
+    && chown -R app:appgroup $HF_HOME
 
-# Expose the service port
-EXPOSE 8002
+# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
+USER app
 
-# Copy the application code
-COPY --chown=app:appgroup main.py ./
+# ─── Expose Service Port ─────────────────────────────────────────────────────────
+EXPOSE 8003
 
-# Run Uvicorn under the non-root user
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003", "--log-level", "info"]
+# ─── Entrypoint ─────────────────────────────────────────────────────────────────
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
