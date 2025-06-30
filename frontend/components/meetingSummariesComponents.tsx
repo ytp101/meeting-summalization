@@ -1,33 +1,85 @@
-// components/MeetingSummaries.tsx
+'use client'
+
 import { MeetingSummary } from '@/types/meetingSummaries'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
+} from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@/components/ui/button'
 
-export default function MeetingSummaries({ data }: { data: MeetingSummary[] }) {
+type Props = {
+  data: MeetingSummary[]
+}
+
+export default function MeetingSummaries({ data }: Props) {
+  if (!data || data.length === 0) {
+    return <p className="text-center text-muted-foreground">No meeting summaries available.</p>
+  }
+
   return (
-    <ScrollArea className="h-[90vh] p-6">
-      <h1 className="text-3xl font-bold mb-4">📋 All Meeting Records</h1>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {data.map((m) => (
-          <Card key={m.id} className="hover:shadow-md transition">
-            <CardHeader>
-              <CardTitle className="flex justify-between">
-                <span>{m.task_id}</span>
-                <Badge variant="outline">
-                  {new Date(m.created_at).toLocaleDateString()}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-1">
-              <p><strong>Source:</strong> {m.source_file}</p>
-              <p><strong>WAV:</strong> {m.wav_file}</p>
-              <p><strong>Transcript:</strong> {m.transcript_file?.slice(0, 80) || 'N/A'}...</p>
-            </CardContent>
-          </Card>
-        ))}
+    <div className='h-[85vh overflow-x-auto rounded-md border'>
+      <div className="min-w-[1400px]">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>ID</TableHead>
+              <TableHead>Source Filename</TableHead>
+              <TableHead>Source Path</TableHead>
+              <TableHead>WAV Path</TableHead>
+              <TableHead>Transcript Path</TableHead>
+              <TableHead>Summary Path</TableHead>
+              <TableHead>Created At</TableHead>
+              <TableHead className="text-right">Download</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.map((item, index) => (
+              <TableRow key={index}>
+                <TableCell>{item.id}</TableCell>
+                <TableCell className="max-w-[200px] truncate" title={item.source_filename}>
+                  {item.source_filename}
+                </TableCell>
+                <TableCell className="max-w-[200px] truncate" title={item.source_path}>
+                  {item.source_path}
+                </TableCell>
+                <TableCell className="max-w-[200px] truncate" title={item.wav_path}>
+                  {item.wav_path}
+                </TableCell>
+                <TableCell className="max-w-[200px] truncate" title={item.transcript_path}>
+                  {item.transcript_path}
+                </TableCell>
+                <TableCell className="max-w-[200px] truncate" title={item.summary_path}>
+                  {item.summary_path}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="outline">
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() =>
+                      window.open(
+                        `http://localhost:8000/download/${item.transcript_path.replace(/^.*[\\/]/, '')}`,
+                        '_blank'
+                      )
+                    }
+                  >
+                    ⬇ Download
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
-    </ScrollArea>
+    </div>
   )
 }
