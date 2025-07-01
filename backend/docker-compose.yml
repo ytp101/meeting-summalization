@@ -130,6 +130,19 @@ services:
     networks:
       - meeting_summarization_network
 
+  # ───────────── File Server ──────────────
+  file-server:
+    build:
+      context: ./file-server
+      dockerfile: Dockerfile 
+    ports: 
+      - "8010:8010"
+    volumes: 
+      - shared_data:/data
+    restart: unless-stopped
+    networks:
+      - meeting_summarization_network
+
   # ───────────── Ollama ──────────────
   ollama:
     image: ollama/ollama:latest
@@ -150,7 +163,6 @@ services:
     restart: unless-stopped
     networks:
       - meeting_summarization_network
-
 # ───────────── Network & Volumes ─────────────
 networks:
   meeting_summarization_network:
