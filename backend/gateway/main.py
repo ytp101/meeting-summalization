@@ -135,7 +135,7 @@ async def upload_and_process(file: UploadFile = File(...)):
         })
         wav_file = pp[0]["preprocessed_file_path"]
         wav_path = Path(wav_file)
-
+        
         # 5) Diarization
         diar = await call_service(client, "diarization", DIAR_URL, {"audio_path": str(wav_path)})
         segments = diar.get("segments", [])

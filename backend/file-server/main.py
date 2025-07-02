@@ -26,19 +26,25 @@ def generate_paths(work_id: str) -> dict:
         "summary": DATA_ROOT / work_id / "summary" / f"{stem}_summary.txt",
     }
 
-@app.get("/available/{work_id}")
-def check_files(work_id: str):
-    try:
-        paths = generate_paths(work_id)
-        return {
-            "source": paths["source"].exists(),
-            "wav": paths["wav"].exists(),
-            "transcript": paths["transcript"].exists(),
-            "summary": paths["summary"].exists()
-        }
-    except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Source file not found")
+# @app.get("/available/{work_id}")
+# def check_files(work_id: str):
+#     try:
+#         paths = generate_paths(work_id)
+#         return {
+#             "source": paths["source"].exists(),
+#             "wav": paths["wav"].exists(),
+#             "transcript": paths["transcript"].exists(),
+#             "summary": paths["summary"].exists()
+#         }
+#     except FileNotFoundError:
+#         raise HTTPException(status_code=404, detail="Source file not found")
 
+# @app.get("/filename/{work_id}")
+# def fetch_filename(work_id): 
+#     source_filename = find_source_filename(work_id)
+#     return {
+#         "source_filename": source_filename
+#     }
 
 @app.get("/download/{work_id}/{category}")
 def download(work_id: str, category: str):
