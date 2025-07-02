@@ -16,6 +16,11 @@ services:
       WHISPER_SERVICE_URL:    http://whisper:8003/whisper/
       DIARIZATION_SERVICE_URL: http://diarization:8004/diarization/
       SUMMARIZATION_SERVICE_URL: http://summarization:8005/summarization/
+      DB_USER: admin 
+      DB_PASSWORD: secret 
+      DB_HOST: 100.91.232.127
+      DB_PORT: 5432 
+      DB_NAME: "meetingdb"
       TZ: Asia/Bangkok
     depends_on:
       - preprocess
