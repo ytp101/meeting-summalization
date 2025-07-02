@@ -7,7 +7,7 @@ export default function HomePage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">📝 Meeting Summary Dashboard</h1>
         <ModalUpload />
-      </div>
+      </div> 
 
       <ViewSummaries />
     </main>

@@ -20,38 +20,90 @@ export default function ResizableTable({ data }: Props) {
   const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const columns: ColumnDef<MeetingSummary>[] = [
-    {
-      accessorKey: 'id',
-      header: 'ID',
+  {
+    accessorKey: 'id',
+    header: 'ID',
+  },
+  {
+    accessorKey: 'work_id',
+    header: 'Work ID',
+  },
+  {
+    id: 'source_download',
+    header: 'Source',
+    cell: ({ row }) => {
+      const workId = row.original.work_id
+      return (
+        <a
+          href={`http://localhost:8010/download/${workId}/source`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline"
+        >
+          Download
+        </a>
+      )
     },
-    {
-      accessorKey: 'source_filename',
-      header: 'Source Filename',
+  },
+  {
+    id: 'wav_download',
+    header: 'WAV',
+    cell: ({ row }) => {
+      const workId = row.original.work_id
+      return (
+        <a
+          href={`http://localhost:8010/download/${workId}/wav`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline"
+        >
+          Download
+        </a>
+      )
     },
-    {
-      accessorKey: 'source_path',
-      header: 'Source Path',
+  },
+  {
+    id: 'transcript_download',
+    header: 'Transcript',
+    cell: ({ row }) => {
+      const workId = row.original.work_id
+      return (
+        <a
+          href={`http://localhost:8010/download/${workId}/transcript`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline"
+        >
+          Download
+        </a>
+      )
     },
-    {
-      accessorKey: 'wav_path',
-      header: 'WAV Path',
+  },
+  {
+    id: 'summary_download',
+    header: 'Summary',
+    cell: ({ row }) => {
+      const workId = row.original.work_id
+      return (
+        <a
+          href={`http://localhost:8010/download/${workId}/summary`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-500 underline"
+        >
+          Download
+        </a>
+      )
     },
-    {
-      accessorKey: 'transcript_path',
-      header: 'Transcript Path',
-    },
-    {
-      accessorKey: 'summary_path',
-      header: 'Summary Path',
-    },
-    {
-      accessorKey: 'created_at',
-      header: 'Created At',
-      cell: ({ getValue }) => (
-        <span>{new Date(getValue() as string).toLocaleDateString()}</span>
-      ),
-    },
-  ]
+  },
+  {
+    accessorKey: 'created_at',
+    header: 'Created At',
+    cell: ({ getValue }) => (
+      <span>{new Date(getValue() as string).toLocaleDateString()}</span>
+    ),
+  },
+]
 
   const table = useReactTable({
     data,
