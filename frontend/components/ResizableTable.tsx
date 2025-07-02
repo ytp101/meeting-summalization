@@ -7,7 +7,7 @@ import {
   ColumnDef,
   ColumnResizeMode,
 } from '@tanstack/react-table'
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { MeetingSummary } from '@/types/meetingSummaries'
 
@@ -28,6 +28,25 @@ export default function ResizableTable({ data }: Props) {
     accessorKey: 'work_id',
     header: 'Work ID',
   },
+  // {
+  //   accessorKey: 'source_filename',
+  //   header: 'Source Filename',
+  //   cell: ({ row }) => {
+  //   // i khow it is bad i am just lazy & btw it is mvp lol 
+  //   // TODO: fix this logic later
+  //   const workId = row.original.work_id
+  //   const [filename, setFilename] = useState('loading...')
+
+  //   useEffect(() => {
+  //     fetch(`http://localhost:8010/filename/${workId}`)
+  //       .then(res => res.json())
+  //       .then(data => setFilename(data.source_filename))
+  //       .catch(() => setFilename('not found'))
+  //   }, [workId])
+
+  //   return <span>{filename}</span>
+  // }
+  // },
   {
     id: 'source_download',
     header: 'Source',

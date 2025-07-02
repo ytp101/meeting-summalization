@@ -5,6 +5,7 @@ from pathlib import Path
 import httpx, uvicorn, os, time, logging
 from datetime import datetime, timezone
 from uuid import uuid4
+from sqlalchemy import create_engine, text
 
 # ——— Logging & Config ——————————————————————————————————————————————————————————
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -20,6 +21,13 @@ DIAR_URL       = os.getenv("DIARIZATION_SERVICE_URL", "http://diarization:8004/d
 WHISPER_URL    = os.getenv("WHISPER_SERVICE_URL", "http://whisper:8003/whisper/")
 SUMMARIZE_URL  = os.getenv("SUMMARIZATION_SERVICE_URL", "http://summarization:8005/summarization/")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "1200"))
+
+DB_URL = f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@" \
+         f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+
+pg_engine = create_engine(DB_URL)
+
+logger.info(f"DB connected at: {pg_engine} with {DB_URL}")
 
 app = FastAPI(title="Meeting Summarization Gateway")
 app.add_middleware(
@@ -51,11 +59,20 @@ async def call_service(client: httpx.AsyncClient, name: str, url: str, payload: 
         logger.error(f"[{name}] error: {e}")
         raise HTTPException(500, f"{name} error: {e}")
 
-
 def generate_task_id() -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     uid = uuid4().hex
     return f"{ts}_{uid}"
+
+def insert_work_id(work_id: str):
+    with pg_engine.connect() as conn: 
+        try: 
+            stmt = text("INSERT INTO meeting_summary (work_id) VALUES (:work_id)")
+            conn.execute(stmt, {"work_id": str(work_id)})
+            conn.commit()
+            print(f"[+] Inserted work_id: {work_id} with {conn}")
+        except Exception as e:
+            print("[-] Error inserting:", e)
  
 # ——— Healthcheck ——————————————————————————————————————————————————————————————
 @app.get("/", response_model=dict)
@@ -118,7 +135,7 @@ async def upload_and_process(file: UploadFile = File(...)):
         })
         wav_file = pp[0]["preprocessed_file_path"]
         wav_path = Path(wav_file)
-
+        
         # 5) Diarization
         diar = await call_service(client, "diarization", DIAR_URL, {"audio_path": str(wav_path)})
         segments = diar.get("segments", [])
@@ -147,12 +164,14 @@ async def upload_and_process(file: UploadFile = File(...)):
         raise HTTPException(500, f"Summary file missing: {summary_path}")
     summary_text = summary_path.read_text(encoding="utf-8")
 
-    return {
-        "task_id": task_id,
-        "filename": stem,
-        "summary": summary_text,
-        "processing_time_seconds": round(elapsed, 2),
-    }
+    insert_work_id(str(task_id))
+
+    # return {
+    #     "task_id": task_id,
+    #     "filename": stem,
+    #     "summary": summary_text,
+    #     "processing_time_seconds": round(elapsed, 2),
+    # }
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
