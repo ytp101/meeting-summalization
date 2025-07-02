@@ -3,7 +3,7 @@ import { pool } from '@/utils/psqlClient';
 
 export async function fetchMeetingSummaries(): Promise<MeetingSummary[]> {
   const result = await pool.query(
-    'SELECT * FROM meeting_summaries ORDER BY created_at ASC'
+    'SELECT * FROM meeting_summary ORDER BY created_at ASC'
   );
 
   return result.rows.map((row) => ({
