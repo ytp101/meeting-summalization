@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - shared_data:./data
+      - shared_data:/data
     environment:
       PREPROCESS_SERVICE_URL: http://preprocess:8001/preprocess/
       WHISPER_SERVICE_URL:    http://whisper:8003/whisper/
