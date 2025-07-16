@@ -10,7 +10,8 @@ Author: yodsran
 """
 
 from fastapi import APIRouter
-from utils.ffmpeg_checker import is_ffmpeg_available
+
+from preprocess.utils.ffmpeg_checker import is_ffmpeg_available
 
 router = APIRouter()
 

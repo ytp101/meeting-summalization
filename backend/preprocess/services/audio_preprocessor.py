@@ -16,8 +16,8 @@ from pathlib import Path
 import asyncio
 from fastapi import HTTPException
 
-from utils.logger import logger
-from config.settings import FFMPEG_TIMEOUT
+from preprocess.utils.logger import logger
+from preprocess.config.settings import FFMPEG_TIMEOUT
 
 async def preprocess(input_file: Path, output_file: Path) -> None:
     """

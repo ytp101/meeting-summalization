@@ -107,3 +107,6 @@ Response:
 
 ### 📌 Note
 This service is intended to run internally as part of a multi-stage AI pipeline and is not exposed to the public internet.
+
+<!-- Test command -->
+<!-- ~/meeting-summalization/backend$ PYTHONPATH=. pytest ./preprocess/tests -->

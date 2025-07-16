@@ -9,9 +9,9 @@ Author: yodsran
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from utils.ffmpeg_checker import is_ffmpeg_available
-from utils.logger import logger
-from routers import root, healthcheck, preprocess
+from preprocess.utils.ffmpeg_checker import is_ffmpeg_available
+from preprocess.utils.logger import logger
+from preprocess.routers import root, healthcheck, preprocess
 
 # FastAPI app
 app = FastAPI(title="Audio Preprocessor")

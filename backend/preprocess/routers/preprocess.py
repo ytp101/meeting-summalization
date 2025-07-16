@@ -15,9 +15,9 @@ from pathlib import Path
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 
-from models.preprocess_request import PreprocessRequest
-from utils.logger import logger
-from services.audio_preprocessor import preprocess as run_preprocess
+from preprocess.models.preprocess_request import PreprocessRequest
+from preprocess.utils.logger import logger
+from preprocess.services.audio_preprocessor import preprocess as run_preprocess
 
 router = APIRouter()
 
