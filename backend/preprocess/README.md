@@ -93,7 +93,7 @@ Response:
 
 ### TODO
 - [ ] Add security/auth middleware
-- [ ] Write unit tests for core services 
+- [x] Write unit tests for core services 
 - [ ] Rewrite Dockerfile for production 
 - [ ] Enable logging to file per process 
 
