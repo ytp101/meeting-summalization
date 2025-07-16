@@ -32,6 +32,7 @@ services:
       - meeting_summarization_network
 
   # ─────────── Preprocessing ───────────
+  # TODO: change name (preprocess->Audio Preprocessor)
   preprocess:
     build:
       context: ./preprocess
