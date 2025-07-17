@@ -71,8 +71,9 @@ npm run dev
 MIT License — See the LICENSE file for more information.
 
 📈 Future Improvements
-- [ ] .mp3 input support
-- [ ] Frontend dashboard for upload and summaries
+- [x] .mp3 input support
+- [x] Frontend dashboard for upload and summaries
 - [ ] Realtime meeting summarization
 - [ ] User authentication and management
 - [ ] Full Kubernetes deployment templates
+- [ ] JSON Based backend

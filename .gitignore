@@ -14,3 +14,5 @@
 backend/preprocess/__pycache__/
 /backend/preprocess/routers/__pycache__
 /backend/preprocess/tests/__pycache__
+
+/backend/lab/
