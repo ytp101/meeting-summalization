@@ -7,15 +7,15 @@ Includes:
 - Startup initialization for VAD model
 """
 
-# TODO: write unit test 
 # TODO: write README.md
+# ~/meeting-summalization/backend$ PYTHONPATH=. pytest ./vad/tests
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-from routers import root, healthcheck, vad  
-from services.vad_service import load_vad_model
-from utils.logger import logger  # Use logger instead of print
+from vad.routers import root, healthcheck, vad  
+from vad.services.vad_service import load_vad_model
+from vad.utils.logger import logger  # Use logger instead of print
 
 # ─── Lifespan startup/shutdown logic ──────────────────────────────────────────────
 @asynccontextmanager

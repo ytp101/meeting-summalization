@@ -1,47 +1,61 @@
 """
-services/vad_service.py – VAD pipeline loader and inference runner.
+🎙️ VAD Inference Router
 
-This module loads the Hugging Face PyAnnote VAD pipeline and provides
-an async-safe function to perform inference on audio files in a
-FastAPI-compatible way.
+This module defines the FastAPI router responsible for handling Voice Activity Detection (VAD) inference requests.
+It exposes a single POST endpoint at `/vad` which accepts an input file path and returns a list of detected
+speech segments.
+
+Key Features:
+- Validates input path and checks for file existence
+- Executes the VAD pipeline asynchronously using the `run_vad_on_file` service
+- Handles exceptions gracefully with meaningful HTTP responses
+- Returns a JSON-formatted list of speech chunks (start, end, chunk_id)
+
+Expected Input:
+{
+    "input_path": "/absolute/path/to/audio.wav"
+}
+
+Example Output:
+[
+    { "chunk_id": 0, "start": 0.0, "end": 1.2 },
+    { "chunk_id": 1, "start": 1.5, "end": 3.8 }
+]
+
+This router is intended to be used as part of a larger audio analysis microservice.
 """
 
-import asyncio
-from pyannote.audio import Pipeline as PyannotePipeline
-from config.settings import HF_TOKEN
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import JSONResponse
+from pathlib import Path
+import logging
 
-# Global VAD pipeline instance
-vad_pipeline = None
+from vad.models.vad_request import VADRequest
+from vad.services.vad_service import run_vad_on_file
 
-async def load_vad_model():
-    """
-    Asynchronously load the PyAnnote VAD model from Hugging Face Hub
-    using the provided HF_TOKEN. This should be called during FastAPI startup.
+router = APIRouter()
 
-    Raises:
-        Exception if model loading fails.
-    """
-    global vad_pipeline
-    vad_pipeline = await asyncio.to_thread(
-        PyAnnotePipeline.from_pretrained,
-        "pyannote/voice-activity-detection",
-        use_auth_token=HF_TOKEN
-    )
+@router.post("/vad", tags=["inference"])
+async def vad_segments(req: VADRequest):
+    path = Path(req.input_path)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Audio file not found")
 
-async def run_vad_on_file(file_path: str):
-    """
-    Asynchronously run VAD inference on the given audio file.
+    try:
+        result = await run_vad_on_file(str(path))
+    except Exception as e:
+        logging.exception("VAD inference failed")
+        raise HTTPException(status_code=500, detail="VAD failed")
 
-    Args:
-        file_path (str): Absolute path to the .wav audio file.
+    timeline = result.get_timeline().support()
 
-    Returns:
-        pyannote.core.Annotation: Resulting timeline of speech segments.
+    # 🧠 Return raw JSON format like in your CLI script
+    segments = []
+    for i, seg in enumerate(timeline):
+        segments.append({
+            "chunk_id": i,
+            "start": round(seg.start, 3),
+            "end": round(seg.end, 3)
+        })
 
-    Raises:
-        RuntimeError: If the pipeline has not been loaded.
-        Any: If model inference fails.
-    """
-    if vad_pipeline is None:
-        raise RuntimeError("VAD pipeline not loaded.")
-    return await asyncio.to_thread(vad_pipeline, file_path)
+    return JSONResponse(content=segments)

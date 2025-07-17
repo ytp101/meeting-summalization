@@ -16,3 +16,4 @@ backend/preprocess/__pycache__/
 /backend/preprocess/tests/__pycache__
 
 /backend/lab/
+**/__pycache__/

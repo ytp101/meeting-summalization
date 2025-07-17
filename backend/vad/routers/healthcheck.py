@@ -6,7 +6,7 @@ to verify whether the VAD pipeline model has been successfully loaded and is rea
 """
 
 from fastapi import APIRouter
-from services.vad_service import vad_pipeline
+from vad.services.vad_service import vad_pipeline
 
 router = APIRouter()
 

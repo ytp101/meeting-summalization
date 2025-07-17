@@ -8,13 +8,13 @@ This module:
 """
 
 import os
-from utils.logger import logger
 
 # ─── Hugging Face Token ─────────────────────────────────────────────
-HF_TOKEN = os.getenv("HF_TOKEN")
-if not HF_TOKEN:
-    logger.error("HF_TOKEN environment variable is missing.")
-    raise RuntimeError("HF_TOKEN must be set to load the VAD model.")
+def get_hf_token() -> str: 
+    token = os.getenv("HF_TOKEN")
+    if not token:
+        raise RuntimeError("HF_TOKEN must be set to load the VAD model.")
+    return token
 
 # ─── API Port ───────────────────────────────────────────────────────
 PORT = int(os.getenv("PORT", 8002))
