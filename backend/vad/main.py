@@ -7,9 +7,6 @@ Includes:
 - Startup initialization for VAD model
 """
 
-# TODO: write README.md
-# ~/meeting-summalization/backend$ PYTHONPATH=. pytest ./vad/tests
-
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
