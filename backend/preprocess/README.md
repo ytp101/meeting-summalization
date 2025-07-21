@@ -77,8 +77,8 @@ async def lifespan(app: FastAPI):
 POST (`/prepocess`)
 ```json
 {
-    "input_path": "/data/upload/video.mp4",
-    "output_dir": "/data/output/"
+    "input_path": "/data/{work_id}/raw/video.mp4",
+    "output_dir": "/data/{work_id}/converted/"
 }
 ```
 
@@ -86,7 +86,7 @@ Response:
 ```json 
 [
     {
-        "preprocessed_file_path": "/data/output/video.wav"
+        "preprocessed_file_path": "/data/{work_id}/converted/video.wav"
     }
 ]
 ```
