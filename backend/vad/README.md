@@ -100,6 +100,10 @@ Response:
 ```
 
 🧪 Optional Enhancements
+<!-- TODO: must do -->
+- [ ] Write new docker image
+ <!--  -->
+- [ ] Optional: make VAD log to file
 - [ ] Make VAD Output as Chunk
 - [ ] Add `min_speech_sec` and `min_silence_sec` params
 - [ ] Support batch mode
