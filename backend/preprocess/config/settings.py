@@ -1,5 +1,5 @@
 """
-Module: utils/config.py
+Module: config/settings.py
 
 Purpose:
 Provides configuration constants for the audio preprocessing system. 
