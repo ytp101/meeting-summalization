@@ -1,112 +1,94 @@
-# 🎧 Audio Preprocessor Service
+# 🔊 Speaker Diarization Service
 
-## Overview
-
-This microservice converts input audio/video files into normalized 16-bit PCM mono WAV format using FFmpeg. It is designed as the **second stage** in an audio processing pipeline—executed before **Diarization** and **ASR** (e.g., Whisper).
-
----
-
-## ✨ Features
-
-- 🔁 Converts multi-format media (MP4, MKV, etc.) to `.wav`
-- 🎚️ Applies loudness normalization (`loudnorm`)
-- 🎵 Outputs 16 kHz, mono, 16-bit PCM WAV format
-- 🚥 Includes healthcheck and service liveness endpoints
-- 🧠 Designed for container-based pipelines (Docker)
-- 🛡️ Planned support for internal-only API access (secure-by-design)
+A FastAPI-based microservice for speaker diarization using the [`pyannote-audio`](https://github.com/pyannote/pyannote-audio) pipeline.  
+Given a WAV audio file, the service detects and segments individual speaker turns.
 
 ---
 
-## 📦 Project Structure
-```bash
-+-- preprocess/
-├── main.py # FastAPI app entrypoint
-├── routers/
-│ ├── root.py # Root '/' liveness endpoint
-│ ├── healthcheck.py # Dependency check (FFmpeg)
-│ └── preprocess.py # Preprocess endpoint
-├── services/
-│ └── audio_preprocessor.py # FFmpeg call logic
-├── models/
-│ └── preprocess_request.py # Pydantic request model
-├── utils/
-│ ├── logger.py # Global logger
-│ └── ffmpeg_checker.py # FFmpeg availability check
-├── config/
-  └── settings.py # Timeout config
-```
+## 🚀 Features
+
+- 🧠 Hugging Face model integration (`pyannote/speaker-diarization-3.1`)
+- 🎯 Accurate speaker segmentation from WAV files
+- ⚡ Lazy-loaded pipeline (loads only when needed)
+- ✅ RESTful endpoints with OpenAPI docs
+- 🧪 Mockable, testable, and ready for CI/CD
 
 ---
 
-## 🚀 API Endpoints
+## 📦 Tech Stack
 
-| Method | Route              | Description                        |
-|--------|-------------------|------------------------------------|
-| `GET`  | `/`               | Service liveness check             |
-| `GET`  | `/healthcheck`    | FFmpeg dependency health check     |
-| `POST` | `/preprocess/`    | Convert media to normalized `.wav` |
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [PyAnnote-Audio](https://github.com/pyannote/pyannote-audio)
+- [Torch + torchaudio](https://pytorch.org/)
+- Pydantic, Uvicorn, HTTPX (for testing)
 
 ---
 
-## 🔧 Preprocessing Details
+## 🧩 API Endpoints
 
-- Input: Video/audio file path
-- Output: WAV file written to target directory
-- Internal call:
-  ```bash
-  ffmpeg -y -i input.mp4 -vn -ar 16000 -ac 1 -c:a pcm_s16le -af loudnorm output.wav
+| Method | Endpoint           | Description                            |
+|--------|--------------------|----------------------------------------|
+| `GET`  | `/`                | Liveness probe                         |
+| `GET`  | `/healthcheck`     | Load model if not yet loaded, return status |
+| `POST` | `/diarization/`    | Process audio file and return speaker segments |
 
-### 🛠 Startup Behavior
-On service startup, the application performs a dependency check to ensure FFmpeg is available:
-
-```python
-@asynccontextmanager
-async def lifespan(app: FastAPI): 
-    if await is_ffmpeg_available():
-        logger.info("FFmpeg is available")
-    else:
-        logger.error("FFmpeg is not installed. Please install it first.")
-    
-    yield
-
-    logger.info("Shutting down Audio Preprocessor")
-```
+diarization/
+├── config/        # Settings & environment
+├── routers/       # API routes
+├── services/      # Model logic & inference
+├── models/        # Pydantic request/response schemas
+├── utils/         # Logging, model loader
+├── tests/         # Pytest + mock-based integration tests
+└── main.py        # FastAPI app entrypoint
 
 
-### 📥 Example Request
-POST (`/prepocess`)
+### 📥 Diarization Request
+POST /diarization/
 ```json
 {
-    "input_path": "/data/{work_id}/raw/video.mp4",
-    "output_dir": "/data/{work_id}/converted/"
+  "audio_path": "/path/to/audio.wav"
 }
 ```
 
-Response: 
+#### 📤 Response
 ```json 
-[
+{
+  "segments": [
     {
-        "preprocessed_file_path": "/data/{work_id}/converted/video.wav"
-    }
-]
+      "start": 0.0,
+      "end": 2.45,
+      "speaker": "SPEAKER_00"
+    },
+    ...
+  ]
+}
 ```
 
-### TODO
-- [ ] Add security/auth middleware
-- [x] Write unit tests for core services 
-- [ ] Rewrite Dockerfile for production 
-- [ ] Enable logging to file per process 
+## ⚙️ Environment Variables
+Set these before running the service:
+| Variable            | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `HF_TOKEN`          | Hugging Face access token (required)                      |
+| `DIARIZATION_MODEL` | HF model ID (default: `pyannote/speaker-diarization-3.1`) |                  |
+| `DEVICE`            | `cuda` or `cpu` (auto-detected if unset)                  |
 
-### 📄 Requirements 
-- Python 3.11+
-- FastAPI
-- FFmpeg (must be installed in runtime environment)
+Create a .env file:
+```env 
+HF_TOKEN=hf_xxx
+DIARIZATION_MODEL=pyannote/speaker-diarization-3.1
+PORT=8004
+DEVICE=cuda
+```
 
-### 🧑‍💻 Author
-- yodsran 
+💡 Roadmap / Backlog
+- [ ]: Support UploadFile via /diarization/upload
 
-### 📌 Note
-This service is intended to run internally as part of a multi-stage AI pipeline and is not exposed to the public internet.
+- [ ]: Return confidence scores (if model supports it)
 
-<!-- Test command -->
-<!-- ~/meeting-summalization/backend$ PYTHONPATH=. pytest ./preprocess/tests -->
+- [ ]: Diarization summary (total speakers, duration)
+
+- [ ]: Dockerization for deployment
+
+- [ ]: CI/CD integration
+
+- [ ]: Speaker embedding comparison (advanced)
