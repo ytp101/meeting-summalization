@@ -13,10 +13,6 @@ import torch
 import torchaudio
 from transformers import pipeline, Pipeline as HFPipeline
 
-# ─── Logging & Configuration ─────────────────────────────────────────────────────────
-logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
-logger = logging.getLogger("whisper_service")
-logger.info("Starting Whisper Speech-to-Text Service")
 
 # ─── FastAPI Setup ─────────────────────────────────────────────────────────────────
 app = FastAPI(title="Whisper Speech-to-Text Service")
