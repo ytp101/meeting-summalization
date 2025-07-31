@@ -44,7 +44,8 @@ COPY --from=builder /install /usr/local
 
 # Set working directory and copy application code
 WORKDIR /home/app
-COPY --chown=app:appgroup . /home/app
+COPY --chown=app:appgroup . /app/diarization
+ENV PYTHONPATH=/app
 
 # Ensure pip-installed scripts in .local/bin are on PATH
 ENV PATH="/home/app/.local/bin:$PATH"
@@ -60,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl --fail http://localhost:8004/health || exit 1
 
 # Entrypoint to start the Uvicorn server
-ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004"]
+ENTRYPOINT ["uvicorn", "diarization.main:app", "--host", "0.0.0.0", "--port", "8004"]

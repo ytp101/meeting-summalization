@@ -53,6 +53,7 @@ COPY --from=builder /install /usr/local
 # Copy application code
 WORKDIR /app
 COPY --chown=app:appgroup . /app
+ENV PYTHONPATH=/app
 
 # Switch to non-root user
 USER app
@@ -65,4 +66,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:8005/health || exit 1
 
 # Entrypoint: start Uvicorn
-ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005"]
+ENTRYPOINT ["uvicorn", "summarization.main:app", "--host", "0.0.0.0", "--port", "8005"]

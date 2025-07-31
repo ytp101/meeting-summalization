@@ -53,7 +53,9 @@ COPY --from=builder /install /usr/local
 
 # Set working directory and copy application code
 WORKDIR /app
-COPY --chown=app:appgroup . /app
+COPY --chown=app:appgroup . /app/vad
+ENV PYTHONPATH=/app
+
 
 # Ensure user-local scripts are on PATH
 ENV PATH="/home/app/.local/bin:$PATH"
@@ -69,4 +71,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:8002/health || exit 1
 
 # Entrypoint: start Uvicorn
-ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+ENTRYPOINT ["uvicorn", "vad.main:app", "--host", "0.0.0.0", "--port", "8002"]

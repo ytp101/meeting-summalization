@@ -43,7 +43,8 @@ COPY --from=builder /install /usr/local
 
 # Set working directory and copy application code
 WORKDIR /usr/src/app
-COPY --chown=app:appgroup . /usr/src/app
+COPY --chown=app:appgroup . /app/gateway
+ENV PYTHONPATH=/app
 
 # Switch to non-root user
 USER app
