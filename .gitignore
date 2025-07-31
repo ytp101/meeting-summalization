@@ -9,4 +9,15 @@
 /database
 
 *.wav
-*.env
+**/.env
+
+/backend/*.env
+
+backend/preprocess/__pycache__/
+/backend/preprocess/routers/__pycache__
+/backend/preprocess/tests/__pycache__
+
+/backend/lab/
+**/__pycache__/
+
+/backend/build.log

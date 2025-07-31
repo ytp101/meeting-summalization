@@ -1,33 +1,65 @@
 version: '3.8'
 
 services:
+  # ───────────── Database ─────────────
+  db:
+    image: postgres:15-alpine
+    container_name: meetingdb
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_DB: ${DB_NAME:-meetingdb}
+      TZ: ${TZ:-Asia/Bangkok}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # now explicitly targets the real DB name
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-meetingdb}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    ports:
+      - "5432:5432" 
+    networks:
+      - meeting_summarization_network
+
   # ───────────── Gateway ─────────────
   gateway:
     build:
       context: ./gateway
       dockerfile: Dockerfile
+    container_name: gateway
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
-      - shared_data:./data
+      - shared_data:/data
     environment:
       PREPROCESS_SERVICE_URL: http://preprocess:8001/preprocess/
       WHISPER_SERVICE_URL:    http://whisper:8003/whisper/
       DIARIZATION_SERVICE_URL: http://diarization:8004/diarization/
       SUMMARIZATION_SERVICE_URL: http://summarization:8005/summarization/
-      DB_USER: admin 
-      DB_PASSWORD: secret 
-      DB_HOST: 100.91.232.127
-      DB_PORT: 5432 
-      DB_NAME: "meetingdb"
-      TZ: Asia/Bangkok
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-meetingdb}
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
     depends_on:
+      - db
       - preprocess
       - vad
       - whisper
       - diarization
       - summarization
-    restart: unless-stopped
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8000/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -36,13 +68,21 @@ services:
     build:
       context: ./preprocess
       dockerfile: Dockerfile
+    container_name: preprocess
+    restart: unless-stopped
     ports:
       - "8001:8001"
     volumes:
       - shared_data:/data
     environment:
-      TZ: Asia/Bangkok
-    restart: unless-stopped
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8001/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -51,14 +91,22 @@ services:
     build:
       context: ./vad
       dockerfile: Dockerfile
+    container_name: vad
+    restart: unless-stopped
     ports:
       - "8002:8002"
     volumes:
       - shared_data:/data
     environment:
       HF_TOKEN: ${HF_TOKEN}
-      TZ: Asia/Bangkok
-    restart: unless-stopped
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8002/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -67,6 +115,8 @@ services:
     build:
       context: ./whisper
       dockerfile: Dockerfile
+    container_name: whisper
+    restart: unless-stopped
     ports:
       - "8003:8003"
     volumes:
@@ -78,7 +128,8 @@ services:
       LANGUAGE: th
       HF_HOME: /home/app/.cache
       NVIDIA_VISIBLE_DEVICES: all
-      TZ: Asia/Bangkok
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
     depends_on:
       - vad
     deploy:
@@ -88,7 +139,12 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    restart: unless-stopped
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8003/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -97,13 +153,18 @@ services:
     build:
       context: ./diarization
       dockerfile: Dockerfile
+    container_name: diarization
+    restart: unless-stopped
     ports:
       - "8004:8004"
     volumes:
       - shared_data:/data
     environment:
       HF_TOKEN: ${HF_TOKEN}
-      TZ: Asia/Bangkok
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
+    depends_on:
+      - vad
     deploy:
       resources:
         reservations:
@@ -111,7 +172,12 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    restart: unless-stopped
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8004/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -120,6 +186,8 @@ services:
     build:
       context: ./summarization
       dockerfile: Dockerfile
+    container_name: summarization
+    restart: unless-stopped
     ports:
       - "8005:8005"
     volumes:
@@ -127,29 +195,45 @@ services:
     environment:
       MODEL_ID: llama3
       OLLAMA_HOST: http://ollama:11434
-      TZ: Asia/Bangkok
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
     depends_on:
       - ollama
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8005/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
-  # ───────────── File Server ──────────────
+  # ───────────── File Server ─────────────
   file-server:
     build:
       context: ./file-server
-      dockerfile: Dockerfile 
-    ports: 
-      - "8010:8010"
-    volumes: 
-      - shared_data:/data
+      dockerfile: Dockerfile
+    container_name: file-server
     restart: unless-stopped
+    ports:
+      - "8010:8010"
+    volumes:
+      - shared_data:/data
     networks:
       - meeting_summarization_network
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:80010/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    environment:
+      PYTHONPATH: /app
 
   # ───────────── Ollama ──────────────
   ollama:
     image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
@@ -164,10 +248,9 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-    restart: unless-stopped
     networks:
       - meeting_summarization_network
-# ───────────── Network & Volumes ─────────────
+
 networks:
   meeting_summarization_network:
     driver: bridge
@@ -176,3 +259,4 @@ volumes:
   shared_data:
   whisper_cache:
   ollama_data:
+  pgdata:
