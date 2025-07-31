@@ -44,8 +44,17 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 WORKDIR /app
-COPY --chown=app:appgroup . /app
+COPY --chown=app:appgroup . /app/preprocess
+ENV PYTHONPATH=/app
 
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         ffmpeg \
+         curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# drop back to non-root for safety
 USER app
 
 # Expose service port
@@ -56,4 +65,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl --fail http://localhost:8001/health || exit 1
 
 # Entrypoint
-ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+ENTRYPOINT ["uvicorn", "preprocess.main:app", "--host", "0.0.0.0", "--port", "8001"]
