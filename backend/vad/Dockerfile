@@ -31,7 +31,6 @@ RUN pip install --upgrade pip \
 FROM python:3.12.10-slim AS runtime
 
 # Metadata
-LABEL org.opencontainers.image.authors="yourname@example.com"
 LABEL org.opencontainers.image.description="Voice Activity Detection (VAD) Service"
 
 # Configure environment
@@ -39,7 +38,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Create non-root user & data/cache directories
-groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
     && mkdir -p /app /data/wav /home/app/.cache/huggingface \
     && chown -R app:appgroup /app /data /home/app/.cache
 

@@ -77,3 +77,5 @@ MIT License — See the LICENSE file for more information.
 - [ ] User authentication and management
 - [ ] Full Kubernetes deployment templates
 - [ ] JSON Based backend
+- [ ] VAD for whisper chunk 
+- [ ] Each service have it own log files

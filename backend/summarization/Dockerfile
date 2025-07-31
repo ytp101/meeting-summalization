@@ -36,7 +36,7 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Create non-root user and data directories
-groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
     && mkdir -p /app /data/transcript /data/summary \
     && chown -R app:appgroup /app /data
 
