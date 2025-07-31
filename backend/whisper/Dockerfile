@@ -1,48 +1,78 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
-# ─── Base Image ────────────────────────────────────────────────────────────────
-FROM python:3.12-slim
+#########################################################
+# Builder Stage: Install build tools & Python dependencies
+#########################################################
+FROM python:3.12.10-slim AS builder
 
-# ─── Environment Settings ─────────────────────────────────────────────────────────
+# Disable Python bytecode and buffering
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ─── Install System Dependencies ─────────────────────────────────────────────────
+WORKDIR /app
+
+# Install build dependencies for Whisper and audio processing
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ffmpeg \
+        build-essential \
         git \
+        pkg-config \
+        ffmpeg \
         libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Create Non-Root User & Working Directory ─────────────────────────────────────
-RUN groupadd -g 1000 appgroup \
-    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin -m app
-WORKDIR /usr/src/app
-
-# ─── Install Python Dependencies ─────────────────────────────────────────────────
+# Install Python dependencies into an isolated prefix
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install --no-cache-dir -r requirements.txt
 
-# ─── Copy Application Code ───────────────────────────────────────────────────────
-COPY --chown=app:appgroup . .
+#########################################################
+# Runtime Stage: Minimal image with runtime dependencies
+#########################################################
+FROM python:3.12.10-slim AS runtime
 
-# ─── Prepare Data Volume Directories ─────────────────────────────────────────────
-# Mount /data as a Docker volume for input and transcript files
-RUN mkdir -p /data/wav /data/transcript \
-    && chown -R app:appgroup /data
+# Metadata
+LABEL org.opencontainers.image.description="Whisper ASR Service: Speech-to-text with OpenAI Whisper"
 
-# ─── Configure Hugging Face Caches ────────────────────────────────────────────────
+# Configure Python environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create non-root user and directories for data/cache
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /usr/src/app -s /sbin/nologin app \
+    && mkdir -p /usr/src/app /data/wav /data/transcript /home/app/.cache/huggingface \
+    && chown -R app:appgroup /usr/src/app /data /home/app/.cache
+
+# Install only runtime system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code into place
+WORKDIR /usr/src/app
+COPY --chown=app:appgroup . /usr/src/app
+
+# Configure Hugging Face cache paths
 ENV HF_HOME=/home/app/.cache
 ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
-RUN mkdir -p $HF_HOME $TRANSFORMERS_CACHE \
-    && chown -R app:appgroup $HF_HOME
 
-# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
+# Ensure user-local scripts are on PATH
+ENV PATH="/home/app/.local/bin:$PATH"
+
+# Switch to non-root user
 USER app
 
-# ─── Expose Service Port ─────────────────────────────────────────────────────────
+# Expose service port
 EXPOSE 8003
 
-# ─── Entrypoint ─────────────────────────────────────────────────────────────────
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]
+# Healthcheck for orchestration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl --fail http://localhost:8003/health || exit 1
+
+# Entrypoint: launch Uvicorn server
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8003"]

@@ -1,40 +1,59 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
-# ─── Base Image ────────────────────────────────────────────────────────────────
-FROM python:3.12.10-slim
+#########################################################
+# Builder Stage: Install dependencies & compile requirements
+#########################################################
+FROM python:3.12-slim AS builder
 
-# ─── Environment Settings ─────────────────────────────────────────────────────────
+# Avoid Python writing .pyc and buffer issues
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ─── Working Directory ───────────────────────────────────────────────────────────
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# ─── System Dependencies ─────────────────────────────────────────────────────────
+# Install system build deps; retain ffmpeg (runtime) here for layer caching
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+        pkg-config \
         ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Non-Root User Setup ─────────────────────────────────────────────────────────
-RUN groupadd -g 1000 appgroup \
-    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin app
+# Install Python dependencies into a separate prefix
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install --no-cache-dir -r requirements.txt
 
-# ─── Python Dependencies ─────────────────────────────────────────────────────────
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+#########################################################
+# Final Stage: Minimal runtime image
+#########################################################
+FROM python:3.12-slim AS runtime
 
-# ─── Copy Application Code ───────────────────────────────────────────────────────
-COPY --chown=app:appgroup . .
+# Configure environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# ─── Data Directories ────────────────────────────────────────────────────────────
-# Ensure directories for raw and converted media exist under /data (Docker volume)
-RUN mkdir -p /data/raw /data/converted \
-    && chown -R app:appgroup /data
+# Create non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
+    && mkdir -p /app /data/raw /data/converted \
+    && chown -R app:appgroup /app /data
 
-# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy application code
+WORKDIR /app
+COPY --chown=app:appgroup . /app
+
 USER app
 
-# ─── Expose Port & Entrypoint ────────────────────────────────────────────────────
+# Expose service port
 EXPOSE 8001
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+
+# Optional: healthcheck for container orchestration
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl --fail http://localhost:8001/health || exit 1
+
+# Entrypoint
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]

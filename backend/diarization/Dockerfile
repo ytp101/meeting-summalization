@@ -1,45 +1,63 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
-# ─── Base Image ────────────────────────────────────────────────────────────────
-# Use slim Python for size; GPU support via nvidia runtime
-FROM python:3.12-slim
+#########################################################
+# Builder Stage: Install dependencies & build Python packages
+#########################################################
+FROM python:3.12-slim AS builder
 
-# ─── Environment Settings ─────────────────────────────────────────────────────────
+# Prevent Python from writing .pyc files and buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ─── Install System Dependencies ─────────────────────────────────────────────────
+WORKDIR /app
+
+# Install system dependencies needed to build and run diarization
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ffmpeg \
+        build-essential \
         git \
+        pkg-config \
         libsndfile1 \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Create Non-Root User ─────────────────────────────────────────────────────────
-RUN groupadd -g 1000 appgroup \
-    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin -m app
+# Install Python dependencies to a dedicated prefix to optimize layer caching
+COPY requirements.txt ./
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install --no-cache-dir -r requirements.txt
 
-# ─── Prepare Data & Cache Directories (as root) ───────────────────────────────────
-RUN mkdir -p /data/wav /home/app/.cache/huggingface \
+#########################################################
+# Runtime Stage: Minimal image with non-root user
+#########################################################
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create a non-root user and directories for data and cache
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /home/app -s /sbin/nologin app \
+    && mkdir -p /data/wav /home/app/.cache \
     && chown -R app:appgroup /data /home/app/.cache
 
-# ─── Switch to Non-Root User & Set Working Directory ─────────────────────────────
-USER app
-WORKDIR /home/app/workdir
+# Copy installed Python packages from builder stage
+COPY --from=builder /install /usr/local
 
-# ─── Ensure User Local Bin is on PATH for pip-installed scripts ──────────────────
+# Set working directory and copy application code
+WORKDIR /home/app
+COPY --chown=app:appgroup . /home/app
+
+# Ensure pip-installed scripts in .local/bin are on PATH
 ENV PATH="/home/app/.local/bin:$PATH"
 
-# ─── Copy and Install Python Dependencies ─────────────────────────────────────────
-COPY --chown=app:appgroup requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Switch to non-root user
+USER app
 
-# ─── Copy Application Code ───────────────────────────────────────────────────────
-COPY --chown=app:appgroup . .
-
-# ─── Expose Service Port ─────────────────────────────────────────────────────────
+# Expose service port for FastAPI
 EXPOSE 8004
 
-# ─── Entrypoint ─────────────────────────────────────────────────────────────────
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004"]
+# Healthcheck for container orchestration
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl --fail http://localhost:8004/health || exit 1
+
+# Entrypoint to start the Uvicorn server
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8004"]

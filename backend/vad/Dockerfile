@@ -1,47 +1,73 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
-# ─── Base Image ────────────────────────────────────────────────────────────────
-# Use a slim Python image for minimal footprint
-FROM python:3.12-slim
+#########################################################
+# Builder Stage: Install build tools & Python dependencies
+#########################################################
+FROM python:3.12.10-slim AS builder
 
-# ─── Environment Configuration ───────────────────────────────────────────────────
+# Disable Python bytecode & buffer stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ─── System Dependencies ─────────────────────────────────────────────────────────
-# Install ffmpeg for audio I/O, git for model downloads, libsndfile for audio
+WORKDIR /app
+
+# Install system dependencies needed for VAD and model handling
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ffmpeg \
+        build-essential \
         git \
+        ffmpeg \
         libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Create Non-Root User & Group ────────────────────────────────────────────────
-RUN groupadd -g 1000 appgroup \
-    && useradd -m -u 1000 -g appgroup -s /usr/sbin/nologin app
+# Copy and install Python dependencies into isolated prefix
+COPY requirements.txt ./
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install --no-cache-dir -r requirements.txt
 
-# ─── Prepare Data & Cache Directories (root) ──────────────────────────────────────
-# Create /data for WAV inputs and Hugging Face cache dirs
-RUN mkdir -p /data/wav /home/app/.cache/huggingface \
-    && chown -R app:appgroup /data /home/app/.cache
+#########################################################
+# Runtime Stage: Minimal image with runtime dependencies
+#########################################################
+FROM python:3.12.10-slim AS runtime
 
-# ─── Switch to Non-Root User & Set Working Directory ─────────────────────────────
-USER app
-WORKDIR /home/app/workdir
+# Metadata
+LABEL org.opencontainers.image.authors="yourname@example.com"
+LABEL org.opencontainers.image.description="Voice Activity Detection (VAD) Service"
+
+# Configure environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create non-root user & data/cache directories
+groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
+    && mkdir -p /app /data/wav /home/app/.cache/huggingface \
+    && chown -R app:appgroup /app /data /home/app/.cache
+
+# Install only runtime system dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Set working directory and copy application code
+WORKDIR /app
+COPY --chown=app:appgroup . /app
 
 # Ensure user-local scripts are on PATH
 ENV PATH="/home/app/.local/bin:$PATH"
 
-# ─── Install Python Dependencies ─────────────────────────────────────────────────
-COPY --chown=app:appgroup requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Switch to non-root user
+USER app
 
-# ─── Copy Application Code ───────────────────────────────────────────────────────
-COPY --chown=app:appgroup . .
-
-# ─── Expose Service Port ─────────────────────────────────────────────────────────
+# Expose service port
 EXPOSE 8002
 
-# ─── Entrypoint ─────────────────────────────────────────────────────────────────
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]
+# Healthcheck endpoint (assumes GET /health returns 200)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl --fail http://localhost:8002/health || exit 1
+
+# Entrypoint: start Uvicorn
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8002"]

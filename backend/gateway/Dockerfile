@@ -1,34 +1,59 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
-FROM python:3.12.10-slim
+#########################################################
+# Builder Stage: Install build tools & Python dependencies
+#########################################################
+FROM python:3.12-slim AS builder
 
-# ─── System Dependencies ─────────────────────────────────────────────────────────
+# Disable bytecode and buffer
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /install
+
+# Install system packages needed for builds and psycopg2 (DB driver)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential \
+        gcc \
+        libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Set Working Directory ───────────────────────────────────────────────────────
-WORKDIR /usr/src/app
-
-# ─── Non-Root User Setup ─────────────────────────────────────────────────────────
-RUN groupadd -g 1000 appgroup \
-    && useradd -u 1000 -g appgroup -s /bin/bash app
-
-# ─── Install Python Dependencies ─────────────────────────────────────────────────
+# Install Python dependencies into a separate prefix for layer caching
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install --no-cache-dir -r requirements.txt
 
-# ─── Copy Application Code ───────────────────────────────────────────────────────
-COPY --chown=app:appgroup . .
+#########################################################
+# Runtime Stage: Minimal image with non-root user
+#########################################################
+FROM python:3.12-slim AS runtime
 
-# ─── Prepare Persistent Data Directories ─────────────────────────────────────────
-RUN mkdir -p /data/raw /data/converted /data/transcript /data/summary \
-    && chown -R app:appgroup /data
+# Runtime environment settings
+env PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
+# Create non-root user and data directories
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /usr/src/app -s /sbin/nologin app \
+    && mkdir -p /usr/src/app /data/raw /data/converted /data/transcript /data/summary \
+    && chown -R app:appgroup /usr/src/app /data
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Set working directory and copy application code
+WORKDIR /usr/src/app
+COPY --chown=app:appgroup . /usr/src/app
+
+# Switch to non-root user
 USER app
 
-# ─── Port & Entrypoint ───────────────────────────────────────────────────────────
+# Expose HTTP port
 EXPOSE 8000
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Healthcheck for orchestration
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl --fail http://localhost:8000/healthcheck || exit 1
+
+# Entrypoint to launch FastAPI via Uvicorn
+ENTRYPOINT ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
