@@ -41,3 +41,5 @@ Content-Type: application/json
 {
   "audio_path": "/path/to/audio.wav"
 }
+
+// ~/meeting-summalization/backend$ PYTHONPATH=. pytest diarization/tests
