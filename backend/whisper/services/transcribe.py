@@ -1,3 +1,13 @@
+"""
+Transcription Service Logic.
+
+Defines the core `transcribe()` function that takes a WAV file path and optional
+diarization segments, and returns word-level segments and formatted transcript lines.
+
+Returns:
+    Tuple[List[WordSegment], List[str]]: Detailed segments and plain text lines.
+"""
+
 from pathlib import Path
 from typing import List, Optional, Tuple
 import asyncio

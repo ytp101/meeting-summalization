@@ -1,3 +1,14 @@
+"""
+Whisper Transcription Endpoint.
+
+POST /whisper/
+Transcribes a WAV file and saves the output to a .txt file.
+Supports optional diarization segments.
+
+Request: TranscribeRequest
+Response: TranscriptionResponse
+"""
+
 from fastapi import APIRouter, HTTPException
 import time     
 from pathlib import Path
