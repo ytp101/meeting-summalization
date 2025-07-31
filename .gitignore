@@ -17,3 +17,5 @@ backend/preprocess/__pycache__/
 
 /backend/lab/
 **/__pycache__/
+
+/backend/build.log
