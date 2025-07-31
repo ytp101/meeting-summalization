@@ -58,6 +58,10 @@ WORKDIR /usr/src/app
 COPY --chown=app:appgroup . /app/whisper 
 ENV PYTHONPATH=/app
 
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh  
+
 # Configure Hugging Face cache paths
 ENV HF_HOME=/home/app/.cache
 ENV TRANSFORMERS_CACHE=/home/app/.cache/huggingface
@@ -76,4 +80,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:8003/health || exit 1
 
 # Entrypoint: launch Uvicorn server
-ENTRYPOINT ["uvicorn", "whisper.main:app", "--host", "0.0.0.0", "--port", "8003"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "whisper.main:app", "--host", "0.0.0.0", "--port", "8003"]

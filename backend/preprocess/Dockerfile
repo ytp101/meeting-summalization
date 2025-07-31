@@ -47,6 +47,10 @@ WORKDIR /app
 COPY --chown=app:appgroup . /app/preprocess
 ENV PYTHONPATH=/app
 
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh 
+
 USER root
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -65,4 +69,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl --fail http://localhost:8001/health || exit 1
 
 # Entrypoint
-ENTRYPOINT ["uvicorn", "preprocess.main:app", "--host", "0.0.0.0", "--port", "8001"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "preprocess.main:app", "--host", "0.0.0.0", "--port", "8001"]

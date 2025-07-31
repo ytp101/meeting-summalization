@@ -47,6 +47,9 @@ WORKDIR /home/app
 COPY --chown=app:appgroup . /app/diarization
 ENV PYTHONPATH=/app
 
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh  
+
 # Ensure pip-installed scripts in .local/bin are on PATH
 ENV PATH="/home/app/.local/bin:$PATH"
 
@@ -61,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl --fail http://localhost:8004/health || exit 1
 
 # Entrypoint to start the Uvicorn server
-ENTRYPOINT ["uvicorn", "diarization.main:app", "--host", "0.0.0.0", "--port", "8004"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "diarization.main:app", "--host", "0.0.0.0", "--port", "8004"]

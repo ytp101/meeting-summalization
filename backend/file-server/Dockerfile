@@ -35,8 +35,12 @@ COPY --from=builder /install /usr/local
 
 # Set working directory and copy application code
 WORKDIR /app
-COPY --chown=app:appgroup . /app/file-server
+COPY --chown=app:appgroup . /app/file_server
 ENV PYTHONPATH=/app
+
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh  
 
 # Switch to non-root user
 USER app
@@ -49,4 +53,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl --fail http://localhost:8010/ || exit 1
 
 # Entrypoint: start FastAPI via Uvicorn
-ENTRYPOINT ["uvicorn", "file-server.main:app", "--host", "0.0.0.0", "--port", "8010"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "file_server.main:app", "--host", "0.0.0.0", "--port", "8010"]

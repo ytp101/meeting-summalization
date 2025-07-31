@@ -56,6 +56,9 @@ WORKDIR /app
 COPY --chown=app:appgroup . /app/vad
 ENV PYTHONPATH=/app
 
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh  
 
 # Ensure user-local scripts are on PATH
 ENV PATH="/home/app/.local/bin:$PATH"
@@ -71,4 +74,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:8002/health || exit 1
 
 # Entrypoint: start Uvicorn
-ENTRYPOINT ["uvicorn", "vad.main:app", "--host", "0.0.0.0", "--port", "8002"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "vad.main:app", "--host", "0.0.0.0", "--port", "8002"]

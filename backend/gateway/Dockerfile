@@ -46,6 +46,10 @@ WORKDIR /usr/src/app
 COPY --chown=app:appgroup . /app/gateway
 ENV PYTHONPATH=/app
 
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh 
+
 # Switch to non-root user
 USER app
 
@@ -57,4 +61,4 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl --fail http://localhost:8000/healthcheck || exit 1
 
 # Entrypoint to launch FastAPI via Uvicorn
-ENTRYPOINT ["uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "gateway.main:app", "--host", "0.0.0.0", "--port", "8000"]

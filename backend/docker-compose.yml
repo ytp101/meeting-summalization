@@ -14,7 +14,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin}"]
+      # now explicitly targets the real DB name
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-meetingdb}"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -51,6 +52,12 @@ services:
       - whisper
       - diarization
       - summarization
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8000/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -68,6 +75,12 @@ services:
     environment:
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8001/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -86,6 +99,12 @@ services:
       HF_TOKEN: ${HF_TOKEN}
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8002/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -118,6 +137,12 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8003/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -145,6 +170,12 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:8004/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -166,6 +197,11 @@ services:
       PYTHONPATH: /app
     depends_on:
       - ollama
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8005/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     networks:
       - meeting_summarization_network
 
@@ -182,6 +218,12 @@ services:
       - shared_data:/data
     networks:
       - meeting_summarization_network
+    healthcheck:
+      # hit your FastAPI healthcheck, not /health
+      test: ["CMD-SHELL", "curl --fail http://localhost:80010/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
     environment:
       PYTHONPATH: /app
 

@@ -52,8 +52,12 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 WORKDIR /app
-COPY --chown=app:appgroup . /app
+COPY --chown=app:appgroup . /app/summarization
 ENV PYTHONPATH=/app
+
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh  
 
 # Switch to non-root user
 USER app
@@ -66,4 +70,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:8005/health || exit 1
 
 # Entrypoint: start Uvicorn
-ENTRYPOINT ["uvicorn", "summarization.main:app", "--host", "0.0.0.0", "--port", "8005"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "summarization.main:app", "--host", "0.0.0.0", "--port", "8005"]
