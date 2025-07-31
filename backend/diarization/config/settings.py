@@ -28,4 +28,4 @@ if not HF_TOKEN:
 DIARIZATION_MODEL: str = os.getenv("DIARIZATION_MODEL", "pyannote/speaker-diarization-3.1")
 
 # Device to run inference on: 'cuda' if available, otherwise 'cpu'
-DEVICE: str = os.getenv("DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
+DEVICE: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
