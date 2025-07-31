@@ -1,42 +1,73 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.4
 
-# ─── Base Image ────────────────────────────────────────────────────────────────
-FROM python:3.12.10-slim
+#########################################################
+# Builder Stage: Install build tools & Python dependencies
+#########################################################
+FROM python:3.12.10-slim AS builder
 
-# ─── Environment Settings ─────────────────────────────────────────────────────────
+# Disable Python bytecode and buffer stdout/stderr
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
-# ─── System Dependencies ─────────────────────────────────────────────────────────
+WORKDIR /app
+
+# Install build dependencies for Python packages
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install into isolated prefix
+COPY requirements.txt ./
+RUN pip install --upgrade pip \
+    && pip install --prefix=/install --no-cache-dir -r requirements.txt
+
+#########################################################
+# Runtime Stage: Minimal image with runtime dependencies
+#########################################################
+FROM python:3.12.10-slim AS runtime
+
+# Metadata
+LABEL org.opencontainers.image.description="Summarization Service: Converts transcripts into concise summaries"
+
+# Configure environment
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create non-root user and data directories
+RUN groupadd -r appgroup && useradd -r -g appgroup -d /app -s /sbin/nologin app \
+    && mkdir -p /app /data/transcript /data/summary \
+    && chown -R app:appgroup /app /data
+
+# Install runtime dependencies only
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# ─── Set Working Directory ───────────────────────────────────────────────────────
-WORKDIR /usr/src/app
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
 
-# ─── Non-Root User Setup ─────────────────────────────────────────────────────────
-RUN groupadd -g 1000 appgroup \
-    && useradd -u 1000 -g appgroup -s /usr/sbin/nologin app
+# Copy application code
+WORKDIR /app
+COPY --chown=app:appgroup . /app/summarization
+ENV PYTHONPATH=/app
 
-# ─── Install Python Dependencies ─────────────────────────────────────────────────
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# copy the bootstrapper and make it executable  
+COPY docker-entrypoint.sh /usr/local/bin/  
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh  
 
-# ─── Copy Application Code ───────────────────────────────────────────────────────
-COPY --chown=app:appgroup . .
-
-# ─── Prepare Data Volume Directories ─────────────────────────────────────────────
-# Mount /data for transcript and summary files
-RUN mkdir -p /data/transcript /data/summary \
-    && chown -R app:appgroup /data
-
-# ─── Switch to Non-Root User ─────────────────────────────────────────────────────
+# Switch to non-root user
 USER app
 
-# ─── Expose Service Port ─────────────────────────────────────────────────────────
+# Expose service port
 EXPOSE 8005
 
-# ─── Entrypoint ─────────────────────────────────────────────────────────────────
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8005"]
+# Healthcheck for container orchestration
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl --fail http://localhost:8005/health || exit 1
+
+# Entrypoint: start Uvicorn
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "summarization.main:app", "--host", "0.0.0.0", "--port", "8005"]
