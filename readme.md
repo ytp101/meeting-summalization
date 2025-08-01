@@ -70,12 +70,33 @@ npm run dev
 📄 License
 MIT License — See the LICENSE file for more information.
 
-📈 Future Improvements
+📈 Roadmap
+| Version | Focus                                                               |
+| ------- | ------------------------------------------------------------------- |
+| `v0.3`  | ✅ Frontend feedback loop, 🧪 start VAD prototype                    |
+| `v0.4`  | 🧠 VAD integrated, 🪵 service logs, 🧱 backend response unification |
+| `v0.5`  | 👤 Auth layer, ☸️ Kubernetes templates ready                        |
+| `v1.0`  | 🎥 Real-time summarization, 🔐 Secure multi-user system             |
+📈 Roadmap
+
+🎯 Core Features
 - [x] .mp3 input support
 - [x] Frontend dashboard for upload and summaries
-- [ ] Realtime meeting summarization
-- [ ] User authentication and management
-- [ ] Full Kubernetes deployment templates
-- [ ] JSON Based backend
-- [ ] VAD for whisper chunk 
-- [ ] Each service have it own log files
+- [ ] Real-time meeting summarization (streaming input → partial output) → requires async buffer + streaming LLM chunking
+- [ ] VAD for Whisper chunking (improve ASR on long files) → prototype with Pyannote or Torchaudio
+
+👤 Authentication
+- [ ] User authentication and management (via Supabase or Auth.js) → Role-based access, session storage
+
+📦 Frontend Enhancements (UX) 
+- [ ] Status feedback (e.g., “Processing…”, “Ready”, “Error”)
+
+⚙️ Backend Enhancements
+- [ ] JSON-based backend response standardization → { status, message, data } format
+- [ ] Each microservice writes its own .log files → For audit/debugging, e.g., /logs/whisper_20250801.log
+
+☸️ DevOps & Deployment
+- [ ] Full Kubernetes deployment templates → Helm chart, service-per-pod, Ingress routing
+- [ ] Add GPU scheduling config (for Whisper, LLaMA)
+- [ ] Centralized .env management (or configmaps/secrets)
+- [ ] Fo
