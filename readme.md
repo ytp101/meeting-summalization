@@ -89,6 +89,7 @@ MIT License — See the LICENSE file for more information.
 - [ ] Extract only keypart (Context Awareness)
 - [ ] Formal & Informal Mode
 - [ ] Formal Mode -> Metadata, Content, Key Action Point
+- [-] VAD for Whisper chunking (Abort Due to Diarization Already have segment)
 
 👤 Authentication
 - [ ] User authentication and management (via Supabase or Auth.js) → Role-based access, session storage
