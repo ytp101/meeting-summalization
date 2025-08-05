@@ -83,13 +83,12 @@ MIT License — See the LICENSE file for more information.
 - [x] .mp3 input support
 - [x] Frontend dashboard for upload and summaries
 - [ ] Real-time meeting summarization (streaming input → partial output) → requires async buffer + streaming LLM chunking
-- [ ] VAD for Whisper chunking (improve ASR on long files) → prototype with Pyannote or Torchaudio
 - [ ] KeyPoint (Layour MetaData, Meeting Content, Key Action)
 - [ ] Integrate with Task System (Auto Assign work after meeting)
 - [ ] Extract only keypart (Context Awareness)
 - [ ] Formal & Informal Mode
 - [ ] Formal Mode -> Metadata, Content, Key Action Point
-- [-] VAD for Whisper chunking (Abort Due to Diarization Already have segment)
+- [-] Aborted: VAD for Whisper chunking (Abort Due to Diarization Already have segment)
 
 👤 Authentication
 - [ ] User authentication and management (via Supabase or Auth.js) → Role-based access, session storage
