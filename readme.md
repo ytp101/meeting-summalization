@@ -104,4 +104,3 @@ MIT License — See the LICENSE file for more information.
 - [ ] Full Kubernetes deployment templates → Helm chart, service-per-pod, Ingress routing
 - [ ] Add GPU scheduling config (for Whisper, LLaMA)
 - [ ] Centralized .env management (or configmaps/secrets)
-- [ ] Fo
