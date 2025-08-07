@@ -218,11 +218,11 @@ services:
       - meeting_summarization_network
 
   # ───────────── File Server ─────────────
-  file-server:
+  fileserver:
     build:
-      context: ./file-server
+      context: ./fileserver
       dockerfile: Dockerfile
-    container_name: file-server
+    container_name: fileserver
     restart: unless-stopped
     user: "1000:1000"
     ports:
