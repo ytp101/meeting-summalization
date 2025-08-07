@@ -220,7 +220,7 @@ services:
   # ───────────── File Server ─────────────
   fileserver:
     build:
-      context: ./fileserver
+      context: ./file_server
       dockerfile: Dockerfile
     container_name: fileserver
     restart: unless-stopped

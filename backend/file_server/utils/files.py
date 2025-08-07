@@ -29,7 +29,6 @@ from pathlib import Path
 # Root path to mounted volume (should be overridden in tests)
 DATA_ROOT = Path("/data")
 
-
 def find_source_filename(work_id: str) -> str:
     """
     Searches the raw/ directory for the first supported audio file.
@@ -55,20 +54,24 @@ def find_source_filename(work_id: str) -> str:
 
 def generate_paths(work_id: str) -> dict:
     """
-    Generates a dictionary of file paths for a given work ID, based on the discovered source filename.
+    Dynamically finds the first file in each category folder for a given work ID.
 
     Args:
         work_id (str): The work identifier (used as the folder name).
 
     Returns:
         dict: A dictionary with keys: source, wav, transcript, summary,
-              each mapped to their expected full Path object.
+              each mapped to their discovered Path object (or None if missing).
     """
-    source_filename = find_source_filename(work_id)
-    stem = Path(source_filename).stem
-    return {
-        "source": DATA_ROOT / work_id / "raw" / source_filename,
-        "wav": DATA_ROOT / work_id / "converted" / f"{stem}.wav",
-        "transcript": DATA_ROOT / work_id / "transcript" / f"{stem}.txt",
-        "summary": DATA_ROOT / work_id / "summary" / f"{stem}_summary.txt",
-    }
+    categories = ["source", "wav", "transcript", "summary"]
+    paths = {}
+
+    for category in categories:
+        folder = DATA_ROOT / work_id / category
+        matches = list(folder.glob("*.*"))  # or "*.txt" if needed
+        if matches:
+            paths[category] = matches[0]
+        else:
+            paths[category] = None  # or raise if you want stricter handling
+
+    return paths

@@ -1,7 +1,7 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 from fastapi import status
-from file_server.main import app
+from main import app
 
 @pytest.mark.asyncio
 async def test_healthcheck_file_server():

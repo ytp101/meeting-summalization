@@ -28,7 +28,8 @@ Author: yodsran
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
-from file_server.utils.files import generate_paths
+from utils.files import generate_paths
+from utils.logger import logger 
 
 router = APIRouter()
 
@@ -41,6 +42,7 @@ def download(work_id: str, category: str):
     try:
         paths = generate_paths(work_id)
         path = paths[category]
+        logger.info(f"File path {path}")
         if not path.exists():
             raise FileNotFoundError()
         return FileResponse(path=path, filename=path.name)
