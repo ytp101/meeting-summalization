@@ -79,24 +79,9 @@ MIT License — See the LICENSE file for more information.
 | `v1.0`  | 🎥 Real-time summarization, 🔐 Secure multi-user system             |
 📈 Roadmap
 
-🎯 Core Features
-- [x] .mp3 input support
-- [x] Frontend dashboard for upload and summaries
-- [ ] Real-time meeting summarization (streaming input → partial output) → requires async buffer + streaming LLM chunking
-- [ ] VAD for Whisper chunking (improve ASR on long files) → prototype with Pyannote or Torchaudio
-
-👤 Authentication
-- [ ] User authentication and management (via Supabase or Auth.js) → Role-based access, session storage
-
-📦 Frontend Enhancements (UX) 
-- [ ] Status feedback (e.g., “Processing…”, “Ready”, “Error”)
-
-⚙️ Backend Enhancements
-- [ ] JSON-based backend response standardization → { status, message, data } format
-- [ ] Each microservice writes its own .log files → For audit/debugging, e.g., /logs/whisper_20250801.log
-
-☸️ DevOps & Deployment
-- [ ] Full Kubernetes deployment templates → Helm chart, service-per-pod, Ingress routing
-- [ ] Add GPU scheduling config (for Whisper, LLaMA)
-- [ ] Centralized .env management (or configmaps/secrets)
-- [ ] Fo
+| Version | Name                        | Key Features                                                                                                                                          | Status     |
+| ------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| **v2**  | **Stable Core**             | ✅ Audio Upload<br>✅ Whisper ASR<br>✅ Diarization<br>✅ Summarization via LLaMA<br>✅ Logging & Healthcheck<br>✅ Modular Docker services                 | ✅ Done     |
+| **v3**  | **User & Experience Layer** | 🔐 Auth System (Supabase or Auth.js)<br>🎛️ Frontend UI (Upload + Result Viewer)<br>📡 API UX Feedback (Processing, Error states)<br>🧪 Test Coverage | ⏳ Next     |
+| **v4**  | **Task Automation Layer**   | 📌 KeyPoint Extraction (Metadata, Content, Action)<br>🧠 Context-Aware Filtering (Only Key Segments)<br>🔄 Integrate Task Assignment System           | Planned    |
+| **v5**  | **Real-Time Engine**        | 🌀 Real-Time Input Streaming<br>📤 Partial Output Buffering<br>🧵 Async LLM Streaming (Chunked LLaMA)<br>🚀 GPU Scheduling & Scaling (K8s-ready)      | Planned 🔭 |

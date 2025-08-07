@@ -1,3 +1,4 @@
-# docker-entrypoint.sh
+#!/bin/sh
+
 chown -R app:appgroup /data 2>/dev/null || true
 exec "$@"

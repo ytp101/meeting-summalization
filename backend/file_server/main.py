@@ -13,7 +13,7 @@ Author: yodsran
 """
 
 from fastapi import FastAPI
-from file_server.routers import dowload, root, healthcheck
+from routers import dowload, root, healthcheck
 
 app = FastAPI(title="Meeting Summary File Server")
 

@@ -2,8 +2,8 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from fastapi import status
 from pathlib import Path
-from file_server.main import app
-from file_server.utils import files  # ✅ FIXED: now imported
+from main import app
+from utils import files  # ✅ FIXED: now imported
 
 @pytest.mark.asyncio
 async def test_download_existing_file(tmp_path):

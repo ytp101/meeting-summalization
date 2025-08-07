@@ -7,6 +7,12 @@ and serves as the starting point for deployment via Uvicorn or ASGI.
 
 from fastapi import FastAPI
 from diarization.routers import root, healthcheck, diarization
+import os 
+
+import os
+
+os.environ["HF_HOME"] = "/home/app/.cache/huggingface"
+os.environ["XDG_CACHE_HOME"] = "/home/app/.cache"
 
 # ——— FastAPI App Initialization ——————————————————————————————————————
 app = FastAPI(
