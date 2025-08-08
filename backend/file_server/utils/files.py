@@ -55,23 +55,44 @@ def find_source_filename(work_id: str) -> str:
 def generate_paths(work_id: str) -> dict:
     """
     Dynamically finds the first file in each category folder for a given work ID.
-
-    Args:
-        work_id (str): The work identifier (used as the folder name).
-
-    Returns:
-        dict: A dictionary with keys: source, wav, transcript, summary,
-              each mapped to their discovered Path object (or None if missing).
+    Returns a dict of Paths (never None). If nothing is found for a category,
+    returns a placeholder Path inside the correct folder so callers can safely
+    call .exists() and turn that into a 404.
     """
-    categories = ["source", "wav", "transcript", "summary"]
-    paths = {}
+    # Map API categories to on-disk directories
+    dir_map = {
+        "source": "raw",
+        "wav": "converted",
+        "transcript": "transcript",
+        "summary": "summary",
+    }
 
-    for category in categories:
-        folder = DATA_ROOT / work_id / category
-        matches = list(folder.glob("*.*"))  # or "*.txt" if needed
+    # Optional: narrow patterns per category (kept broad but reasonable)
+    glob_map = {
+        "source": "*.*",       # mp3/mp4/m4a/mov live here
+        "wav": "*.wav",
+        "transcript": "*.txt",
+        "summary": "*.txt",
+    }
+
+    paths: dict[str, Path] = {}
+
+    for category, folder_name in dir_map.items():
+        folder = DATA_ROOT / work_id / folder_name
+        pattern = glob_map.get(category, "*.*")
+        matches = list(folder.glob(pattern))
+
         if matches:
             paths[category] = matches[0]
         else:
-            paths[category] = None  # or raise if you want stricter handling
+            # Return a placeholder path to avoid None → .exists() crash.
+            # Router will do path.exists() → False → 404 (as intended).
+            placeholder_name = {
+                "source": ".missing_source",
+                "wav": ".missing_audio.wav",
+                "transcript": ".missing_transcript.txt",
+                "summary": ".missing_summary.txt",
+            }.get(category, ".missing")
+            paths[category] = folder / placeholder_name
 
     return paths
