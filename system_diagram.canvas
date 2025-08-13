@@ -1,0 +1,330 @@
+{
+  "nodes": [
+    {
+      "type": "text",
+      "id": "988d2593-f16a-4341-b4b5-4cf611c5e84b",
+      "x": 589.9857264927455,
+      "y": -660.6999816894531,
+      "width": 122,
+      "height": 107,
+      "text": "---\ntext-align: center\n---\n ## User  \n End User"
+    },
+    {
+      "type": "group",
+      "id": "582c22b1-1c78-4699-9ca6-ee172295bee5",
+      "x": 502.48572649274547,
+      "y": -403.6999816894531,
+      "width": 572,
+      "height": 207,
+      "label": "Web Application | Next.js, React"
+    },
+    {
+      "type": "text",
+      "id": "35db9a67-0818-4d72-9c28-0bd96067fb1a",
+      "x": 552.4857264927455,
+      "y": -353.6999816894531,
+      "width": 197,
+      "height": 107,
+      "text": "---\nfiles: [\"app/page.tsx\",\"components/ModalUpload.tsx\",\"components/ViewSummaries.tsx\"]\ntext-align: center\n---\n## User Interface  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "c464216b-3718-4f0d-a224-587f420cc87c",
+      "x": 869.4857264927455,
+      "y": -353.6999816894531,
+      "width": 155,
+      "height": 107,
+      "text": "---\nfiles: [\"app/action.ts\",\"utils/psqlClient.ts\"]\ntext-align: center\n\n--- \n## API Client  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "cf43f7e4-32b4-4ac5-bc28-966958b5208a",
+      "x": 459.48572649274547,
+      "y": -16.699981689453125,
+      "width": 619,
+      "height": 567,
+      "label": "API Gateway | Python, FastAPI"
+    },
+    {
+      "type": "text",
+      "id": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "x": 865.4857264927455,
+      "y": 33.300018310546875,
+      "width": 163,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/upload_file.py\",\"routers/root.py\"]\ntext-align: center\n\n--- \n## API Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "93dadc9c-3462-479b-975a-f9fe6f5c57e8",
+      "x": 509.48572649274547,
+      "y": 33.300018310546875,
+      "width": 236,
+      "height": 107,
+      "text": "---\nfiles: [\"utils/pg.py\"]\ntext-align: center\n---\n## PostgreSQL Utility  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "861efd7d-baab-43cb-b12e-cde15e29c4f3",
+      "x": -937.2999877929688,
+      "y": 1297.3000183105469,
+      "width": 541,
+      "height": 327,
+      "label": "File Server | Python, FastAPI"
+    },
+    {
+      "type": "text",
+      "id": "babd1358-887a-4912-8225-4572793e9821",
+      "x": -610.2999877929688,
+      "y": 1467.3000183105469,
+      "width": 164,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/dowload.py\",\"routers/root.py\"]\ntext-align: center\n\n--- \n## File Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "a37e197a-6332-4993-b60a-d2dc98a31870",
+      "x": -887.2999877929688,
+      "y": 1467.3000183105469,
+      "width": 157,
+      "height": 107,
+      "text": "---\nfiles: [\"utils/files.py\"]\ntext-align: center\n\n--- \n## File Utility  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "b141c9f7-f0fd-46c1-b419-7fb94ec4a42c",
+      "x": -1092.7999877929688,
+      "y": 850.3000183105469,
+      "width": 651,
+      "height": 207,
+      "label": "Audio Preprocessor | Python, FastAPI, FFmpeg"
+    },
+    {
+      "type": "text",
+      "id": "200f8a12-9557-4ac4-b603-9e78c1ec47cf",
+      "x": -1042.7999877929688,
+      "y": 900.3000183105469,
+      "width": 238,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/preprocess.py\"]\ntext-align: center\n\n--- \n## Preprocess Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "e9095258-4f87-42d4-ba09-b52ef843d2da",
+      "x": -684.7999877929688,
+      "y": 900.3000183105469,
+      "width": 193,
+      "height": 107,
+      "text": "---\nfiles: [\"services/audio_preprocessor.py\"]\ntext-align: center\n\n--- \n## Audio Service  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "8fa4b9d5-d553-457b-91dc-d3ce49520e64",
+      "x": -321.79998779296875,
+      "y": 850.3000183105469,
+      "width": 550,
+      "height": 207,
+      "label": "VAD Service | Python, FastAPI"
+    },
+    {
+      "type": "text",
+      "id": "26e7a2ba-c783-4acc-a4b9-0895a5788a74",
+      "x": 7.20001220703125,
+      "y": 900.3000183105469,
+      "width": 171,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/vad.py\"]\ntext-align: center\n\n--- \n## VAD Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "3f37d53c-80bd-4042-9833-516cf1bbc5b0",
+      "x": -271.79998779296875,
+      "y": 900.3000183105469,
+      "width": 159,
+      "height": 107,
+      "text": "---\nfiles: [\"services/vad_service.py\"]\ntext-align: center\n\n--- \n## VAD Logic  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "95533bea-8f79-4a56-b03e-137eb5534887",
+      "x": 348.20001220703125,
+      "y": 850.3000183105469,
+      "width": 643,
+      "height": 207,
+      "label": "Diarization Service | Python, FastAPI"
+    },
+    {
+      "type": "text",
+      "id": "63e79879-fa92-4c86-8d8e-6332c25ef4a5",
+      "x": 709.2000122070312,
+      "y": 900.3000183105469,
+      "width": 232,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/diarization.py\"]\ntext-align: center\n\n--- \n## Diarization Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "965a7280-a2e2-4e40-90e0-b04cc78c49d3",
+      "x": 398.20001220703125,
+      "y": 900.3000183105469,
+      "width": 191,
+      "height": 107,
+      "text": "---\nfiles: [\"utils/load_model.py\"]\ntext-align: center\n\n--- \n## Model Loader  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "8c71682c-6c50-450a-861a-bff4f6fb139e",
+      "x": 1111.2000122070312,
+      "y": 850.3000183105469,
+      "width": 994,
+      "height": 207,
+      "label": "Whisper Transcriber | Python, FastAPI, OpenAI Whisper"
+    },
+    {
+      "type": "text",
+      "id": "937d2061-bc87-477e-ac9b-788b1baac8a1",
+      "x": 1161.2000122070312,
+      "y": 900.3000183105469,
+      "width": 209,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/whisper.py\"]\ntext-align: center\n\n--- \n## Whisper Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "4ee3f3dc-20ae-424f-8930-5214ebd6cf6c",
+      "x": 1816.2000122070312,
+      "y": 900.3000183105469,
+      "width": 239,
+      "height": 107,
+      "text": "---\nfiles: [\"services/transcribe.py\"]\ntext-align: center\n\n--- \n## Transcribe Service  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "c58fa269-0ad7-4b12-9906-4bdedd8c0336",
+      "x": 1490.2000122070312,
+      "y": 900.3000183105469,
+      "width": 206,
+      "height": 107,
+      "text": "---\nfiles: [\"services/merger.py\"]\ntext-align: center\n\n--- \n## Merger Service  \n  undefined"
+    },
+    {
+      "type": "group",
+      "id": "ca0bee1e-0f3a-4cfd-b01d-80510457149e",
+      "x": 2225.2000122070312,
+      "y": 850.3000183105469,
+      "width": 682,
+      "height": 207,
+      "label": "Summarization Service | Python, FastAPI, Ollama"
+    },
+    {
+      "type": "text",
+      "id": "42411c8c-0e6b-415c-9554-616b42ca62e1",
+      "x": 2584.2000122070312,
+      "y": 900.3000183105469,
+      "width": 273,
+      "height": 107,
+      "text": "---\nfiles: [\"routers/summarize.py\"]\ntext-align: center\n\n--- \n## Summarization Router  \n  undefined"
+    },
+    {
+      "type": "text",
+      "id": "b789d9f9-5f29-41fb-8cce-85c7aab5509a",
+      "x": 2275.2000122070312,
+      "y": 900.3000183105469,
+      "width": 189,
+      "height": 107,
+      "text": "---\nfiles: [\"services/ollama_client.py\"]\ntext-align: center\n\n--- \n## Ollama Client  \n  undefined"
+    }
+  ],
+  "edges": [
+    {
+      "id": "9a15e70d-57d7-4e62-85b4-02873f0f76b3",
+      "fromNode": "988d2593-f16a-4341-b4b5-4cf611c5e84b",
+      "fromSide": "bottom",
+      "toNode": "35db9a67-0818-4d72-9c28-0bd96067fb1a",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Uses"
+    },
+    {
+      "id": "17740cc0-0157-48e3-b221-26d76200efb0",
+      "fromNode": "c464216b-3718-4f0d-a224-587f420cc87c",
+      "fromSide": "bottom",
+      "toNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Sends requests"
+    },
+    {
+      "id": "0d2d7757-1ebb-4c49-a16d-a1a94746fcb9",
+      "fromNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "fromSide": "bottom",
+      "toNode": "babd1358-887a-4912-8225-4572793e9821",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Uploads files"
+    },
+    {
+      "id": "044ad992-ac7e-4677-b7e9-eec2cdf3e202",
+      "fromNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "fromSide": "bottom",
+      "toNode": "200f8a12-9557-4ac4-b603-9e78c1ec47cf",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Requests audio"
+    },
+    {
+      "id": "e56fc120-397f-4587-9168-371d28ca838c",
+      "fromNode": "e9095258-4f87-42d4-ba09-b52ef843d2da",
+      "fromSide": "bottom",
+      "toNode": "babd1358-887a-4912-8225-4572793e9821",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Fetches audio"
+    },
+    {
+      "id": "c8a52fb3-06e9-476f-94db-ffc70cb91e57",
+      "fromNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "fromSide": "bottom",
+      "toNode": "26e7a2ba-c783-4acc-a4b9-0895a5788a74",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Requests VAD"
+    },
+    {
+      "id": "4eb720a0-7200-4ceb-8d4a-85326e5ed00a",
+      "fromNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "fromSide": "bottom",
+      "toNode": "63e79879-fa92-4c86-8d8e-6332c25ef4a5",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Requests diarization"
+    },
+    {
+      "id": "1bac72fc-6e82-4bc8-9276-d8a82e9f3218",
+      "fromNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "fromSide": "bottom",
+      "toNode": "937d2061-bc87-477e-ac9b-788b1baac8a1",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Requests transcription"
+    },
+    {
+      "id": "de86a366-a6a0-4bd7-8c76-5b46e3d18f3c",
+      "fromNode": "4ee3f3dc-20ae-424f-8930-5214ebd6cf6c",
+      "fromSide": "bottom",
+      "toNode": "babd1358-887a-4912-8225-4572793e9821",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Fetches audio"
+    },
+    {
+      "id": "cca953c8-fab1-4407-aa5a-fc04591abfc2",
+      "fromNode": "88ffb4a5-e1c1-4b7f-ace2-c23a89957845",
+      "fromSide": "bottom",
+      "toNode": "42411c8c-0e6b-415c-9554-616b42ca62e1",
+      "toSide": "top",
+      "toEnd": "arrow",
+      "label": "Requests summary"
+    }
+  ]
+}
