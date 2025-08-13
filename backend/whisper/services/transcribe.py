@@ -16,6 +16,8 @@ import torchaudio
 from whisper.models.whisper_request import DiarSegment
 from whisper.models.whisper_response import WordSegment
 from whisper.utils.load_model import get_whisper_model
+from whisper.utils.post_processing import postprocess_text
+from backend.whisper.services.merger import words_to_utterances
 
 # ─── Transcription Logic ───────────────────────────────────────────────────────────
 async def transcribe(
@@ -33,13 +35,14 @@ async def transcribe(
         total_dur = waveform.shape[1] / sample_rate
         diar_segments = [DiarSegment(start=0.0, end=total_dur)]
 
-    results: List[WordSegment] = []
-    lines: List[str] = []
     model = get_whisper_model()
+
+    flat_word_dicts: List[dict] = [] 
+    word_results: List[WordSegment] = []
 
     # 3) Transcribe each segment
     for seg in diar_segments:
-        t0, t1 = seg.start, seg.end
+        t0, t1 = float(seg.start), float(seg.end)
         start_frame = int(t0 * sample_rate)
         end_frame   = int(t1 * sample_rate)
         chunk = waveform[:, start_frame:end_frame]
@@ -52,19 +55,56 @@ async def transcribe(
         if isinstance(out, dict) and "chunks" in out:
             for c in out["chunks"]:
                 c0, c1 = c.get("timestamp", (None, None))
-                text   = c.get("text", "").strip()
+                txt    = (c.get("text") or "").strip()
                 if c0 is None or not text:
                     continue
-                c1 = c1 or t1
-                ws = WordSegment(start=c0, end=c1, speaker=seg.speaker, text=text)
-                results.append(ws)
-                lines.append(f"[{c0:.2f}-{c1:.2f}] {seg.speaker or 'Speaker'}: {text}")
+                
+                # make timestamps global (offset by diar segment start)
+                g0 = t0 + float(c0)
+                g1 = t0 + float(c1 if c1 is not None else c0) 
+
+
+                # Apply post-processing to the word token 
+                clean_txt = postprocess_text(txt, day_first=True)
+
+                ws = WordSegment(
+                    start=g0, 
+                    end=g1, 
+                    speaker=seg.speaker, 
+                    text=clean_txt
+                )
+                word_results.append(ws) 
+
+                flat_word_dicts.append({ 
+                    "start": g0, 
+                    "end": g1, 
+                    "speaker": seg.speaker or "Speaker", 
+                    "text": clean_txt
+                })
+                
         # 3b) chunk-level fallback
         else:
             text = out.get("text", "").strip() if isinstance(out, dict) else ""
             if text:
-                ws = WordSegment(start=t0, end=t1, speaker=seg.speaker, text=text)
-                results.append(ws)
-                lines.append(f"[{t0:.2f}-{t1:.2f}] {seg.speaker or 'Speaker'}: {text}")
+                clean_txt = postprocess_text(text, day_first=True)
+                
+                # Emit a single word-like span to keep outputs consistent
+                ws = WordSegment(start=t0, end=t1, speaker=seg.speaker, text=clean_txt)
+                word_results.append(ws)
+                flat_word_dicts.append({
+                    "start": t0,
+                    "end": t1, 
+                    "speaker": seg.speaker or "Speaker", 
+                    "text": clean_txt 
+                })
 
-    return results, lines
+        # 4)  Merge word in utterances (speaker-aware) and render user line 
+        utterances = words_to_utterances(flat_word_dicts, joiner="", max_gap_s=0.6)
+
+        lines: List[str] = [] 
+        for u in utterances: 
+            # Post-process the merged line text as a second pass (safe idempotent)
+            line_txt = postprocess_text(u["text"], day_first=True)
+            lines.append(f"[{u['start']:.2f}-{u['end']:.2f}] {u['speaker']}: {line_txt}")
+    
+    return word_results, lines

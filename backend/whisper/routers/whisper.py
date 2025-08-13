@@ -16,11 +16,14 @@ import asyncio
 import gc
 import torch
 from fastapi.responses import JSONResponse
+import json
 
 from whisper.services.transcribe import transcribe
 from whisper.utils.logger import logger
 from whisper.models.whisper_request import TranscribeRequest
 from whisper.models.whisper_response import TranscriptionResponse
+from whisper.utils.merger_ws import words_to_utterances_from_ws
+
 router = APIRouter()
 
 # ─── Routes ───────────────────────────────────────────────────────────────────────
@@ -31,23 +34,41 @@ router = APIRouter()
 )
 async def whisper_endpoint(req: TranscribeRequest):
     start = time.time()
+
     # validate paths
     wav_path = Path(req.filename)
     if not wav_path.is_file():
         logger.error(f"WAV not found: {wav_path}")
         raise HTTPException(status_code=404, detail="WAV file not found")
 
-    txt_dir = Path(req.output_dir)
-    txt_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(req.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    txt_name = wav_path.stem
-    txt_file = txt_dir / f"{txt_name}.txt"
+    stem = wav_path.stem 
+    txt_file = out_dir / f"{stem}.txt"
+    word_json = out_dir / f"{stem}.word_segments.json"
+    utt_json  = out_dir / f"{stem}.utterances.json"
 
-    # transcribe
-    segments, lines = await transcribe(wav_path, req.segments)
+     # 1) transcribe -> returns (List[WordSegment], List[str])
+    word_segments, lines = await transcribe(wav_path, req.segments)
 
-    # write transcript
+    # 2) render human transcript
     await asyncio.to_thread(txt_file.write_text, "\n".join(lines), encoding="utf-8")
+
+    # 3) write machine JSON: word_segments
+    word_payload = {
+        "schema_version": "v1",
+        "segments": [ws.model_dump() for ws in word_segments],
+    }
+    await asyncio.to_thread(
+        word_json.write_text, json.dumps(word_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    # 4) write machine JSON: utterances (speaker-merged)
+    utterances = words_to_utterances_from_ws(word_segments, max_gap_s=0.6)
+    await asyncio.to_thread(
+        utt_json.write_text, json.dumps(utterances, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
     # cleanup GPU
     if torch.cuda.is_available():
@@ -57,6 +78,9 @@ async def whisper_endpoint(req: TranscribeRequest):
     elapsed = time.time() - start
     logger.info(f"Transcribed '{req.filename}' in {elapsed:.2f}s")
 
+    # Return paths (your TranscriptionResponse can include/ignore extras)
     return JSONResponse({
-        "transcription_file_path": f"{txt_file}",
+        "transcription_file_path": str(txt_file),
+        "word_segments_path": str(word_json),
+        "utterances_path": str(utt_json),
     })
