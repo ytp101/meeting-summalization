@@ -12,12 +12,21 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import asyncio
 import torchaudio
+import inspect
 
 from whisper.models.whisper_request import DiarSegment
 from whisper.models.whisper_response import WordSegment
 from whisper.utils.load_model import get_whisper_model
 from whisper.utils.post_processing import postprocess_text
 from whisper.services.merger import words_to_utterances
+
+def _supports_prev_text(p):
+    # Works across transformers versions; only add the arg if supported
+    try:
+        return "condition_on_prev_text" in inspect.signature(p.__call__).parameters
+    except Exception:
+        return False
+
 
 # ─── Transcription Logic ───────────────────────────────────────────────────────────
 async def transcribe(
@@ -48,8 +57,21 @@ async def transcribe(
         chunk = waveform[:, start_frame:end_frame]
 
         # run model in background
+        call_kwargs = {
+            "return_timestamps": "word",
+            "chunk_length_s": 30,
+            "sampling_rate": sample_rate,
+            "generate_kwargs": {
+                "language": "th",   # or from settings
+                "num_beams": 5,
+                "task": "transcribe",
+            },
+        }
+        if _supports_prev_text(model):
+            call_kwargs["condition_on_prev_text"] = True
+
         audio_np = chunk.mean(dim=0).cpu().numpy()
-        out = await asyncio.to_thread(model, audio_np)
+        out = await asyncio.to_thread(model, audio_np, **call_kwargs)
 
         # 3a) word-level chunks
         if isinstance(out, dict) and "chunks" in out:
