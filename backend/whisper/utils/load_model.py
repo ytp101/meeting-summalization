@@ -24,14 +24,9 @@ def get_whisper_model() -> HFPipeline:
                 model=MODEL_ID,
                 device=DEVICE,
                 torch_dtype=DTYPE,
-                return_timestamps=True,
-                chunk_length_s=30,
-                batch_size=1,
-                generate_kwargs={"language": str(LANGUAGE)}
             )
             logger.info("Whisper model loaded successfully")
         except Exception as e:
             logger.error(f"Failed to load Whisper model: {e}")
             raise RuntimeError("Whisper model loading failed") from e
-        logger.info("Whisper model loaded successfully")
     return _whisper_model

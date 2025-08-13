@@ -49,9 +49,10 @@ async def preprocess(input_file: Path, output_file: Path) -> None:
         "-ar", "16000",       # Sample rate: 16 kHz
         "-ac", "1",           # Mono channel
         "-c:a", "pcm_s16le",  # 16-bit PCM encoding
-        "-af", "loudnorm",    # Loudness normalization
+        "-af", "highpass=f=100,dynaudnorm=f=150:g=15,loudnorm",
         str(output_file)
     ]
+
     logger.info(f"Running FFmpeg: {' '.join(cmd)}")
 
     try:
