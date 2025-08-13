@@ -17,7 +17,7 @@ from whisper.models.whisper_request import DiarSegment
 from whisper.models.whisper_response import WordSegment
 from whisper.utils.load_model import get_whisper_model
 from whisper.utils.post_processing import postprocess_text
-from backend.whisper.services.merger import words_to_utterances
+from whisper.services.merger import words_to_utterances
 
 # ─── Transcription Logic ───────────────────────────────────────────────────────────
 async def transcribe(
