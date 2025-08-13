@@ -32,3 +32,5 @@ class WordSegment(BaseModel):
 
 class TranscriptionResponse(BaseModel):
     transcription_file_path: str
+    word_segmnts_path: Optional[str] = None 
+    utterances_path: Optional[str] = None
