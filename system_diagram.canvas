@@ -4,10 +4,10 @@
       "type": "text",
       "id": "988d2593-f16a-4341-b4b5-4cf611c5e84b",
       "x": 589.9857264927455,
-      "y": -660.6999816894531,
+      "y": -627.220135679703,
       "width": 122,
-      "height": 107,
-      "text": "---\ntext-align: center\n---\n ## User  \n End User"
+      "height": 73.52015399024992,
+      "text": "---\ntext-align: center\n---\n # User  "
     },
     {
       "type": "group",
@@ -16,25 +16,25 @@
       "y": -403.6999816894531,
       "width": 572,
       "height": 207,
-      "label": "Web Application | Next.js, React"
+      "label": "Frontend (Nextjs)"
     },
     {
       "type": "text",
       "id": "35db9a67-0818-4d72-9c28-0bd96067fb1a",
-      "x": 552.4857264927455,
-      "y": -353.6999816894531,
-      "width": 197,
-      "height": 107,
-      "text": "---\nfiles: [\"app/page.tsx\",\"components/ModalUpload.tsx\",\"components/ViewSummaries.tsx\"]\ntext-align: center\n---\n## User Interface  \n  undefined"
+      "x": 519.499755607435,
+      "y": -352.8364854433153,
+      "width": 269.29298286205733,
+      "height": 70.1583837337592,
+      "text": "---\nfiles: [\"app/page.tsx\",\"components/ModalUpload.tsx\",\"components/ViewSummaries.tsx\"]\ntext-align: center\n---\n# User Interface"
     },
     {
       "type": "text",
       "id": "c464216b-3718-4f0d-a224-587f420cc87c",
-      "x": 869.4857264927455,
-      "y": -353.6999816894531,
-      "width": 155,
-      "height": 107,
-      "text": "---\nfiles: [\"app/action.ts\",\"utils/psqlClient.ts\"]\ntext-align: center\n\n--- \n## API Client  \n  undefined"
+      "x": 803.6653588884182,
+      "y": -365.10884540753653,
+      "width": 220.82036760432732,
+      "height": 118.40886371808341,
+      "text": "---\nfiles: [\"app/action.ts\",\"utils/psqlClient.ts\"]\ntext-align: center\n---\n# API Client  \n  port 8000, 8010"
     },
     {
       "type": "group",

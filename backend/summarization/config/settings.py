@@ -33,3 +33,7 @@ SYSTEM_PROMPT  = os.getenv("SYSTEM_PROMPT", "Summarize the following transcript 
 MAX_TOKENS     = int(os.getenv("MAX_TOKENS", 4096))
 TEMPERATURE    = float(os.getenv("TEMPERATURE", 0.2))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 300))
+
+# 2 pass .env 
+PASS1_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+PASS2_MODEL = "Qwen/Qwen2.5-14B-Instruct-AWQ"
