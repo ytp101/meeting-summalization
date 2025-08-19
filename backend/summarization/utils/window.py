@@ -1,12 +1,12 @@
 from typing import List, Tuple 
 from summarization.models.two_pass_model import Utterance 
 
-def mmss(ms: int) -> str: 
+def mmss(ms: float) -> str:
     if ms is None:
-        return "--:--" 
-    s = int(ms // 1000) 
-    m = s // 60. 
-    ss = s % 60 
+        return "--:--"
+    s = int(float(ms) // 1000)   # force to int
+    m = int(s // 60)
+    ss = int(s % 60)
     return f"{m:02d}:{ss:02d}"
 
 def render_lines(uttrs: List[Utterance]) -> List[str]: 

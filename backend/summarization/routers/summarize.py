@@ -94,7 +94,8 @@ async def summarize(req: dict):
     )
     if not windows:
         raise HTTPException(status_code=400, detail="Empty transcript after normalization")
-    
+    logger.info("Built %d windows for summarization", len(windows))
+    logger.info("Windows: %s", windows)
     # 3) LLM client (Ollama) 
     c1 = OllamaChat(str(settings.PASS1_BASE_URL), settings.PASS1_MODEL)
     c2 = OllamaChat(str(settings.PASS2_BASE_URL), settings.PASS2_MODEL) 
@@ -102,7 +103,7 @@ async def summarize(req: dict):
     # 4) Pass-1 over windows 
     chunk_objects: List[ChunkSummary] = []
     for idx, (win_text, (w_start, w_end)) in enumerate(windows): 
-        user = prompts.PASS1_USER_TEMPLATE.format(windows=win_text)
+        user = prompts.PASS1_USER_TEMPLATE.format(window=win_text)
         content = await c1.chat(prompts.PASS1_SYSTEM, user, max_tokens=1300)
         try: 
             obj = json.loads(content) 
