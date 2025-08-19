@@ -26,6 +26,7 @@ Author:
 """
 
 import os
+from pydantic import AnyHttpUrl 
 
 OLLAMA_HOST    = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 MODEL_ID       = os.getenv("MODEL_ID", "llama3")
@@ -35,5 +36,20 @@ TEMPERATURE    = float(os.getenv("TEMPERATURE", 0.2))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 300))
 
 # 2 pass .env 
+# llama3.1:8b
 PASS1_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
+
+# qwen2.5:14b
 PASS2_MODEL = "Qwen/Qwen2.5-14B-Instruct-AWQ"
+
+# pass 1 and pass 2 base URLs
+PASS1_BASE_URL: AnyHttpUrl = "http://localhost:11434"
+PASS2_BASE_URL: AnyHttpUrl = "http://localhost:11434"
+
+# Windowing default 
+MAX_WINDoW_CHARA: int = 5000 
+OVERLAP: int = 900 
+
+# merge rules 
+GAP_MERGE_SEC: float = 0.9 
+MAX_CHARS_MARGE: int = 600 
