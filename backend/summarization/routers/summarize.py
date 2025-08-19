@@ -21,61 +21,123 @@ Author:
 from fastapi import APIRouter, HTTPException
 import time  
 from pathlib import Path
+import json
+from typing import List 
 
 from summarization.utils.logger import logger
-from summarization.models.summarize_schema import SummarizeRequest, SummarizeResponse
-from summarization.services.ollama_client import call_ollama
+from summarization.models.two_pass_model import (
+    MeetingDoc,
+    ChunkSummary, 
+    FinalSummary, 
+    Utterance
+)
+from summarization.utils.normalizer import normalize_utterances 
+from summarization.utils.window import build_windows_by_chars 
+from summarization.utils import prompts 
+from summarization.services.ollama_client import OllamaChat 
+from summarization.config import settings
 
 router = APIRouter()
 
 @router.post(
     "/summarization/",
-    response_model=SummarizeResponse,
-    summary="Summarize a transcript file"
+    summary="Summarize a transcript file (two-pass, Ollama)",
 )
-async def summarize(req: SummarizeRequest):
+async def summarize(req: dict): 
     """
-    Summarize a plain-text transcript file using an Ollama-hosted LLM.
-
-    Steps:
-    1. Validate transcript path and content.
-    2. Generate summary from model.
-    3. Write summary to disk with `_summary.txt` suffix.
-
-    Args:
-        req (SummarizeRequest): Contains `transcript_path` and `output_dir`.
-
-    Returns:
-        SummarizeResponse: Path to the saved `.txt` summary.
-
-    Raises:
-        HTTPException: For file not found, empty content, or model errors.
+    Accepts either:
+    - {"transcript_path": str, "output_dir": str}
+    - {"meeting": MeetingDoc, "output_dir": str}
+    Reads transcript, builds windows, runs Pass-1 (chunk summaries) with model A,
+    then Pass-2 (reducer) with model B, writes final text file, and returns path.
     """
-    start = time.time()
-    input_file = Path(req.transcript_path)
-    if not input_file.exists():
-        logger.error("Transcript not found: %s", input_file)
-        raise HTTPException(status_code=404, detail="Transcript file not found")
+    start = time.time() 
 
-    transcript = input_file.read_text(encoding="utf-8").strip()
-    if not transcript:
-        logger.error("Transcript is empty: %s", input_file)
-        raise HTTPException(status_code=400, detail="Transcript is empty")
+    # 1) Load trancript text 
+    meeting: MeetingDoc 
+    output_dir: Path 
 
-    # Step 1: Call Ollama model
-    summary_text = await call_ollama(transcript)
-    if not summary_text.strip():
-        logger.error("Empty summary returned")
-        raise HTTPException(status_code=500, detail="Empty summary from model")
+    if "meeting" in req:
+        meeting = MeetingDoc(**req["meeting"])
+        output_dir = Path(req["output_dir", "./result"])
+    else: 
+        # Back-compat: plain text transcript file
+        transcript_path = Path(req.get("transcript_path", ""))
+        
+        output_dir = Path(req.get("output_dir", "./result"))
+        if not transcript_path.exists():
+            logger.error("Transcript not found: %s", transcript_path)
+            raise HTTPException(status_code=404, detail="Transcript file not found")
+        transcript = transcript_path.read_text(encoding="utf-8").strip()
+        
+        if not transcript:
+            logger.error("Transcript is empty: %s", transcript_path)
+            raise HTTPException(status_code=400, detail="Transcript is empty")
+        
+        # Wrap plain text as a single-speaker MeetingDoc
+        meeting = MeetingDoc(
+        meeting_id=transcript_path.stem,
+        utterances=[Utterance(speaker="S1", start_ms=0, end_ms=None, text=transcript)]
+        )
 
-    # Step 2: Write to output directory
-    out_dir = Path(req.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    summary_file = f"{input_file.stem}_summary.txt"
-    summary_path = out_dir / summary_file
-    summary_path.write_text(summary_text, encoding="utf-8")
-    logger.info("✅ Wrote summary: %s", summary_path)
+    # 2) Normalize and window 
+    uttrs = normalize_utterances(
+        meeting.utterances, 
+        gap_merge_sec=settings.GAP_MERGE_SEC,
+        max_chars_merge=settings.MAX_CHARS_MERGE 
+    )
+    windows = build_windows_by_chars(
+        uttrs, 
+        max_chars=settings.MAX_WINDOW_CHARS,
+        overlap_chars=settings.OVERLAP_CHARS, 
+    )
+    if not windows:
+        raise HTTPException(status_code=400, detail="Empty transcript after normalization")
+    
+    # 3) LLM client (Ollama) 
+    c1 = OllamaChat(str(settings.PASS1_BASE_URL), settings.PASS1_MODEL)
+    c2 = OllamaChat(str(settings.PASS2_BASE_URL), settings.PASS2_MODEL) 
 
+    # 4) Pass-1 over windows 
+    chunk_objects: List[ChunkSummary] = []
+    for idx, (win_text, (w_start, w_end)) in enumerate(windows): 
+        user = prompts.PASS1_USER_TEMPLATE.format(windows=win_text)
+        content = await c1.chat(prompts.PASS1_SYSTEM, user, max_tokens=1300)
+        try: 
+            obj = json.loads(content) 
+        except json.JSONDecodeError: 
+            # Fallback: wrap as free-text summary if model ignores JSON mode
+            obj = {"summary": content, "decisions": [], "action_items": []}
+        chunk_objects.append(ChunkSummary(
+            window_index=idx,
+            start_ms=w_start,
+            end_ms=w_end,
+            summary=obj.get("summary", ""),
+            decisions=obj.get("decisions", []) or [],
+            action_items=obj.get("action_items", []) or [],
+        ))
+
+    # 5) Pass-2 reduce 
+    # TODO: fix here later 
+    jsonl = "".join(json.dumps(cs.dict(), ensure_ascii=False) for cs in chunk_objects)
+    user2 = prompts.PASS2_USER_TEMPLATE.format(jsonl=jsonl)
+    content2 = await c2.chat(prompts.PASS2_SYSTEM, user2, max_tokens=1800)
+    # Expect JSON; if not, treat as text
+    try:
+        final = json.loads(content2)
+        final_text = _format_final_text(final)
+    except json.JSONDecodeError:
+        final_text = content2.strip()
+
+    # 6) Write final text
+    output_dir.mkdir(parents=True, exist_ok=True)
+    out_name = f"{meeting.meeting_id}_summary.txt"
+    out_path = output_dir / out_name
+    out_path.write_text(final_text, encoding="utf-8")
+    await c1.aclose(); await c2.aclose()
     elapsed = time.time() - start
+    logger.info(f"Summarization content: {final_text}")
+    logger.info("Meeting %s summarized in %.2fs", meeting.meeting_id, elapsed)
+    logger.info("✅ Wrote summary: %s", out_path)
     logger.info("⏱️ Summarization completed in %.2fs", elapsed)
-    return SummarizeResponse(summary_path=str(summary_path))
+    return {"summary_path": str(out_path)}

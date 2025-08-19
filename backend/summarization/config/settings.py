@@ -47,8 +47,8 @@ PASS1_BASE_URL: AnyHttpUrl = "http://localhost:11434"
 PASS2_BASE_URL: AnyHttpUrl = "http://localhost:11434"
 
 # Windowing default 
-MAX_WINDoW_CHARA: int = 5000 
-OVERLAP: int = 900 
+MAX_WINDOW_CHARS: int = 5000 
+OVERLAP_CHARS: int = 900 
 
 # merge rules 
 GAP_MERGE_SEC: float = 0.9 
