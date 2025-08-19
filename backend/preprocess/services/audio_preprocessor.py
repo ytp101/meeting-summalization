@@ -45,13 +45,17 @@ async def preprocess(input_file: Path, output_file: Path) -> None:
     """
     cmd = [
         "ffmpeg", "-y", "-i", str(input_file),
-        "-vn",                # Disable video stream
-        "-ar", "16000",       # Sample rate: 16 kHz
-        "-ac", "1",           # Mono channel
-        "-c:a", "pcm_s16le",  # 16-bit PCM encoding
+        "-vn",                      # no video
         "-af", "highpass=f=100,dynaudnorm=f=150:g=15,loudnorm",
-        str(output_file)
+        "-ar", "48000",             # Opus works natively at 48k
+        "-ac", "1",                 # mono (speech)
+        "-c:a", "libopus",
+        "-b:a", "48k",              # ~30–40 MB for 1 hr
+        "-vbr", "on",               # variable bitrate for quality
+        "-application", "voip",     # speech-optimized
+        str(output_file)            # <-- use .opus extension
     ]
+
 
     logger.info(f"Running FFmpeg: {' '.join(cmd)}")
 
