@@ -36,6 +36,7 @@ from summarization.utils.window import build_windows_by_chars
 from summarization.utils import prompts 
 from summarization.services.ollama_client import OllamaChat 
 from summarization.config import settings
+from summarization.utils.text_renderer import _format_final_text
 
 router = APIRouter()
 
@@ -118,8 +119,7 @@ async def summarize(req: dict):
         ))
 
     # 5) Pass-2 reduce 
-    # TODO: fix here later 
-    jsonl = "".join(json.dumps(cs.dict(), ensure_ascii=False) for cs in chunk_objects)
+    jsonl = "".join(json.dumps(cs.model_dump(), ensure_ascii=False) for cs in chunk_objects)
     user2 = prompts.PASS2_USER_TEMPLATE.format(jsonl=jsonl)
     content2 = await c2.chat(prompts.PASS2_SYSTEM, user2, max_tokens=1800)
     # Expect JSON; if not, treat as text
