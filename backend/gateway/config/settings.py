@@ -65,3 +65,8 @@ DB_URL = (
     f"postgresql://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@"
     f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
 )
+
+# Upload env
+MAX_BYTES: int = os.getenv("MAX_BYTES", 10 * 1024**3)  # 10 GB
+CHUNK_SIZE: int = os.getenv("CHUNK_SIZE", 10 * 1024**2)  # 10 MB
+UPLOAD_TIMEOUT: int = os.getenv("UPLOAD_TIMEOUT", 20 * 60) # 20 minutes

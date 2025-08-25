@@ -35,6 +35,7 @@ from gateway.utils.utils import generate_task_id, call_service
 from gateway.config.settings import DATA_DIR, PREPROCESS_URL, DIAR_URL, WHISPER_URL, SUMMARIZE_URL
 from gateway.utils.logger import logger
 from gateway.utils.pg import insert_work_id
+from gateway.services.upload import save_upload_nohash
 
 router = APIRouter()
 
@@ -74,9 +75,8 @@ async def upload_and_process(file: UploadFile = File(...)) -> dict:
 
     # 3) Save raw file
     raw_path = raw_dir / file.filename
-    content = await file.read()
-    raw_path.write_bytes(content)
-    logger.info(f"Saved upload → {raw_path}")
+    status = await save_upload_nohash(file, raw_path)
+    logger.info(f"Saved upload → {raw_path} with {status}")
 
     start = time.time()
 
