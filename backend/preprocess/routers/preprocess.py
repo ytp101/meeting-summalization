@@ -57,7 +57,7 @@ async def preprocess(req: PreprocessRequest):
 
     output_dir = Path(req.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_file = output_dir / f"{input_path.stem}.wav"
+    output_file = output_dir / f"{input_path.stem}.opus"
 
     await run_preprocess(input_path, output_file)
 
