@@ -56,9 +56,15 @@ async def transcribe(
         "return_timestamps": "word",
         "generate_kwargs": {
             "language": str(LANGUAGE),  # e.g., "th"
-            "num_beams": 5,
+            "num_beams": 1,
             "task": "transcribe",
+            "temperature": 0.0,
+            "no_repeat_ngram_size": 3,
+            "repetition_penalty": 1.1,
         },
+        "chunk_length_s": 10,
+        "stride_length_s": [2.0, 2.0],
+        "batch_size": 1,
     }
     if _supports_prev_text(model):
         call_kwargs["condition_on_prev_text"] = True
