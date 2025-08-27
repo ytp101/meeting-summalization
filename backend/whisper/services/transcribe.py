@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple, Callable
 import asyncio, inspect, subprocess, json
 import torchaudio
+import torch
 
 from whisper.models.whisper_request import DiarSegment
 from whisper.models.whisper_response import WordSegment
@@ -77,6 +78,7 @@ async def transcribe(
             "language": str(LANGUAGE) if LANGUAGE else None,  # e.g., "th" or None for auto
             "num_beams": NUM_BEAMS,                           # set NUM_BEAMS=1 for speed pass
             "task": "transcribe",
+            "temperaure": 0.0,
         },
         # IMPORTANT: internal windowing for long files
         "chunk_length_s": CHUNK_LENGTH,
@@ -86,11 +88,14 @@ async def transcribe(
     if _supports_prev_text(model):
         call_kwargs["condition_on_prev_text"] = True
 
+    free, total = torch.cuda.mem_get_info()
+    print(f"GPU free {free/1e9:.2f} GB / total {total/1e9:.2f} GB")
+
     outs = await asyncio.to_thread(model, batched, **call_kwargs)
     if not isinstance(outs, list):
         outs = [outs]
 
-    # 4.5) Return memory to the system (PyTorch caching allocator)
+    # 4.5) TODO: Return memory to the system (PyTorch caching allocator)
 
     # 5) Parse results → per-word segments (global timestamps) + progress
     processed_sec = 0.0
