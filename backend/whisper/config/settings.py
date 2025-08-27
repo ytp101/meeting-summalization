@@ -32,17 +32,9 @@ HF_HOME.mkdir(parents=True, exist_ok=True)
 os.environ["HF_HOME"] = str(HF_HOME)
 
 # Whisper model configuration
-# openai/whisper-medium
-# MODEL_ID = os.getenv("MODEL_ID", "openai/whisper-large-v3-turbo")
-MODEL_ID = os.getenv("MODEL_ID", "openai/whisper-medium")
+MODEL_ID = os.getenv("MODEL_ID", "openai/whisper-large-v3-turbo")
 LANGUAGE = os.getenv("LANGUAGE", "en")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 1200))
-
-# Whisper tuning parameters 
-NUM_BEAMS: int = 1 
-CHUNK_LENGTH: int = 10 
-STRIDE_LENS_S: tuple[int, int] = (2, 2) # windows overlap in seconds 
-BATCH_SIZE: int = 1
 
 # Hardware configuration
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
