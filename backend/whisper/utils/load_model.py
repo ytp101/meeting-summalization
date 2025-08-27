@@ -13,6 +13,7 @@ def is_model_loaded() -> bool:
     """
     return _whisper_model is not None
 
+# sigleton pattern for loading the model
 def get_whisper_model() -> HFPipeline:
     global _whisper_model
 
