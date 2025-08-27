@@ -36,6 +36,12 @@ MODEL_ID = os.getenv("MODEL_ID", "openai/whisper-large-v3-turbo")
 LANGUAGE = os.getenv("LANGUAGE", "en")
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 1200))
 
+# Whisper tuning parameters 
+NUM_BEAMS: int = 1 
+CHUNK_LENGTH: int = 30 
+STRIDE_LENS_S: tuple[int, int] = (6, 2) # windows overlap in seconds 
+BATCH_SIZE: int = 8
+
 # Hardware configuration
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if torch.cuda.is_available() else torch.float32
