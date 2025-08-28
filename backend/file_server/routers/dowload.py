@@ -35,7 +35,7 @@ router = APIRouter()
 
 @router.get("/download/{work_id}/{category}")
 def download(work_id: str, category: str):
-    valid_categories = {"source", "wav", "transcript", "summary"}
+    valid_categories = {"source", "opus", "transcript", "summary"}
     if category not in valid_categories:
         raise HTTPException(status_code=400, detail="Invalid category")
 

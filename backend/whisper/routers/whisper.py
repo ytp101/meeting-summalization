@@ -36,21 +36,22 @@ async def whisper_endpoint(req: TranscribeRequest):
     start = time.time()
 
     # validate paths
-    wav_path = Path(req.filename)
-    if not wav_path.is_file():
-        logger.error(f"WAV not found: {wav_path}")
-        raise HTTPException(status_code=404, detail="WAV file not found")
+    opus_path = Path(req.filename)
+    if not opus_path.is_file():
+        logger.error(f"OPUS not found: {opus_path}")
+        raise HTTPException(status_code=404, detail="Opus file not found")
 
     out_dir = Path(req.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    stem = wav_path.stem 
+    stem = opus_path.stem 
     txt_file = out_dir / f"{stem}.txt"
     word_json = out_dir / f"{stem}.word_segments.json"
     utt_json  = out_dir / f"{stem}.utterances.json"
 
      # 1) transcribe -> returns (List[WordSegment], List[str])
-    word_segments, lines = await transcribe(wav_path, req.segments)
+     # segment come from diarization step 
+    word_segments, lines = await transcribe(opus_path, req.segments)
 
     # 2) render human transcript
     await asyncio.to_thread(txt_file.write_text, "\n".join(lines), encoding="utf-8")
