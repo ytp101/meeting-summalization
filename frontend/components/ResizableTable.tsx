@@ -65,13 +65,13 @@ export default function ResizableTable({ data }: Props) {
     },
   },
   {
-    id: 'wav_download',
-    header: 'WAV',
+    id: 'opus_download',
+    header: 'OPUS',
     cell: ({ row }) => {
       const workId = row.original.work_id
       return (
         <a
-          href={`http://localhost:8010/download/${workId}/wav`}
+          href={`http://localhost:8010/download/${workId}/opus`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 underline"

@@ -62,7 +62,7 @@ def generate_paths(work_id: str) -> dict:
     # Map API categories to on-disk directories
     dir_map = {
         "source": "raw",
-        "wav": "converted",
+        "opus": "converted",
         "transcript": "transcript",
         "summary": "summary",
     }
@@ -70,7 +70,7 @@ def generate_paths(work_id: str) -> dict:
     # Optional: narrow patterns per category (kept broad but reasonable)
     glob_map = {
         "source": "*.*",       # mp3/mp4/m4a/mov live here
-        "wav": "*.wav",
+        "opus": "*.opus",
         "transcript": "*.txt",
         "summary": "*.txt",
     }
@@ -89,7 +89,7 @@ def generate_paths(work_id: str) -> dict:
             # Router will do path.exists() → False → 404 (as intended).
             placeholder_name = {
                 "source": ".missing_source",
-                "wav": ".missing_audio.wav",
+                "opus": ".missing_audio.wav",
                 "transcript": ".missing_transcript.txt",
                 "summary": ".missing_summary.txt",
             }.get(category, ".missing")
