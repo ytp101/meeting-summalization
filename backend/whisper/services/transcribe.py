@@ -2,21 +2,33 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 import asyncio, inspect
 import torchaudio
+import torch 
 
 from whisper.models.whisper_request import DiarSegment
 from whisper.models.whisper_response import WordSegment
 from whisper.utils.load_model import get_whisper_model
 from whisper.utils.post_processing import postprocess_text
 from whisper.services.merger import words_to_utterances
-from whisper.config.settings import LANGUAGE
+from whisper.config.settings import LANGUAGE, PAD_S, MIN_LEN_S, TARGET_SR
 from whisper.utils.same_speaker import merge_turns_by_speaker
-from whisper.utils.fix_missing_end import _fix_missing_ends  # expects list[chunk]
+from whisper.utils.fix_missing_end import _fix_missing_ends
 
-def _supports_prev_text(pipeline_obj) -> bool:
-    try:
-        return "condition_on_prev_text" in inspect.signature(pipeline_obj.__call__).parameters
-    except Exception:
-        return False
+def best_mono(chunk: torch.Tensor) -> torch.Tensor:
+    # chunk: (C, T) 
+    if chunk.ndim == 1: 
+        return chunk 
+    if chunk.shape[0] == 1:
+        return chunk.squeeze(0).contiguous() 
+
+    ch_energy = chunk.abs().mean(dim=1)  # (C,)
+    best_idx = int(torch.argmax(ch_energy).item())
+    return chunk[best_idx].contiguous()  # (T,)
+
+def normalize_peak(x: torch.Tensor, peak_target: float = 0.95) -> torch.Tensor:
+    peak = x.abs().max() 
+    if peak > 0: 
+        x = (x / peak) * peak_target
+    return x
 
 async def transcribe(
     wav_path: Path,
@@ -24,12 +36,22 @@ async def transcribe(
 ) -> Tuple[List[WordSegment], List[str]]:
     # 1) Load audio
     waveform, sample_rate = await asyncio.to_thread(torchaudio.load, str(wav_path))
+    waveforn = waveform.float().contiguous()
 
-    # 2) Diarization segments (or whole file)
+    # 2) Explicit resample to Whisper's SR 
+    if sample_rate != TARGET_SR: 
+        waveform = torchaudio.functional.resample(
+            waveform, sample_rate, TARGET_SR, lowpass_filter_width=64
+        )
+        sample_rate = TARGET_SR
+    
+    total_sameples = waveform.shape[1] 
+    total_dur = total_sameples / sample_rate 
+
+    # 3) Diarization segments (or whole file), with small padding
     if segments:
         diar_segments = sorted(segments, key=lambda s: s.start)
     else:
-        total_dur = waveform.shape[1] / sample_rate
         diar_segments = [DiarSegment(start=0.0, end=total_dur)]
 
     model = get_whisper_model()
@@ -37,37 +59,56 @@ async def transcribe(
     flat_word_dicts: List[dict] = []
     word_results: List[WordSegment] = []
 
-    # 3) Build batched inputs (GPU-efficient)
-    batched: List[dict] = []
+    batched: List[dict] = [] 
     meta: List[Tuple[DiarSegment, float, float]] = []
 
-    for seg in diar_segments:
-        t0, t1 = float(seg.start), float(seg.end)
-        s0 = int(t0 * sample_rate); s1 = int(t1 * sample_rate)
-        chunk = waveform[:, s0:s1]
+    for segment in diar_segments:
+        # pad & clamp 
+        t0 = max(0.0, float(segment.start) - PAD_S) 
+        t1 = min(float(segment.end) + PAD_S, total_dur)
 
-        audio_mono = chunk.mean(dim=0) if chunk.shape[0] > 1 else chunk.squeeze(0)
-        audio_np = audio_mono.float().cpu().numpy()
+        s0 = int(t0 * sample_rate)
+        s1 = int(t1 * sample_rate) 
+        if s1 <= s0: 
+            continue 
+
+        chunk = waveform[:, s0:s1]  # (C, L)
+        if chunk.numel() == 0: 
+            continue
+
+        # choose best single channel 
+        audio_mono = best_mono(chunk)  # (Tesg,) 
+        # quick silence/too-short filter 
+        if audio_mono.abs().mean().item() < 1e-4: 
+            continue 
+        if audio_mono.shape[0] < int(MIN_LEN_S * sample_rate):
+            continue 
+
+        # normalize peaks 
+        audio_mono = normalize_peak(audio_mono)
+
+        # numpy float32 
+        audio_np = audio_mono.numpy().astype("float32")
         batched.append({"array": audio_np, "sampling_rate": sample_rate})
-        meta.append((seg, t0, t1))
+        meta.append((segment, t0, t1))
+    
+    if not batched:
+        return [], []
 
     # 4) Single batched call
     call_kwargs = {
         "return_timestamps": "word",
+        "chunk_length_s": 20,
+        "stride_length_s": (5.0, 5.0),
+        "batch_size": max(1, min(8, len(batched))),
         "generate_kwargs": {
-            "language": str(LANGUAGE),  # e.g., "th"
-            # "num_beams": 1,
+            "language": LANGUAGE,
             "task": "transcribe",
-            # "temperature": 0.0,
-            # "no_repeat_ngram_size": 3,
-            # "repetition_penalty": 1.1,
+            "suppress_blank": True,
+            "temperature": 0.0,
         },
-        # "chunk_length_s": 10,
-        # "stride_length_s": [2.0, 2.0],
-        # "batch_size": 1,
+        "condition_on_previous_text": False,
     }
-    if _supports_prev_text(model):
-        call_kwargs["condition_on_prev_text"] = True
 
     outs = await asyncio.to_thread(model, batched, **call_kwargs)
     if not isinstance(outs, list):

@@ -39,3 +39,8 @@ REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 1200))
 # Hardware configuration
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
 DTYPE = torch.float16 if torch.cuda.is_available() else torch.float32
+
+# Transcription parameters
+PAD_S = 0.25 # seconds of padding on each side of a segment 
+MIN_LEN_S = 0.5 # minimum segment length in seconds
+TARGET_SR = 16000 # target sample rate for Whisper model
