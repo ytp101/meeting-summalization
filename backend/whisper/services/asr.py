@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Tuple
+
+import numpy as _np
+import torch as _t
+import soundfile as _sf
 
 from .progress import tqdm as _tqdm
 
@@ -13,7 +18,6 @@ __all__ = [
     "asr_with_policy_ladder",
 ]
 
-
 # Memory policy ladder (keeps model loaded; trades throughput for VRAM)
 POLICIES: Dict[str, Dict[str, Any]] = {
     "standard": {"batch_size": 2, "chunk_length_s": 20, "stride_length_s": (5.0, 5.0)},
@@ -21,12 +25,94 @@ POLICIES: Dict[str, Dict[str, Any]] = {
     "ultra":    {"batch_size": 1, "chunk_length_s": 6,  "stride_length_s": (1.5, 1.5), "return_timestamps": True},
 }
 
-
 def _merge_kwargs(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(base)
     out.update(overrides)
     return out
 
+def _load_audio(path: str) -> Tuple[_np.ndarray, int]:
+    """Read audio file at native rate -> mono float32 numpy array, sampling_rate."""
+    audio, sr = _sf.read(path, always_2d=False)
+    if audio.ndim == 2:  # stereo -> mono
+        audio = _np.mean(audio, axis=1)
+    # cast to float32 in [-1, 1]
+    if audio.dtype != _np.float32:
+        audio = audio.astype(_np.float32, copy=False)
+    return audio, int(sr)
+
+def _dict_get(d: Dict[str, Any], *names, default=None):
+    for n in names:
+        if n in d and d[n] is not None:
+            return d[n]
+    return default
+
+def _coerce_one_to_hf(item: Any, default_sr: int | None) -> Dict[str, Any]:
+    """
+    Normalize various input shapes to HF-required {"raw": np/torch, "sampling_rate": int}.
+    Supported:
+      - str/Path -> load file
+      - torch.Tensor / np.ndarray (requires default_sr)
+      - dict with variants: {"raw", "sampling_rate"} (pass-through),
+        or {"array"/"audio"/"waveform": ..., "sr"/"rate"/"sampling_rate": ...},
+        or {"path": ...} / {"file": ...}
+    """
+    # Already correct shape
+    if isinstance(item, dict) and "raw" in item and "sampling_rate" in item:
+        return {"raw": item["raw"], "sampling_rate": int(item["sampling_rate"])}
+
+    # File-like inputs
+    if isinstance(item, (str, os.PathLike)):
+        raw, sr = _load_audio(str(item))
+        return {"raw": raw, "sampling_rate": sr}
+
+    if isinstance(item, dict):
+        # file path inside dict
+        path = _dict_get(item, "path", "file", "filename")
+        if path:
+            raw, sr = _load_audio(str(path))
+            return {"raw": raw, "sampling_rate": sr}
+
+        # waveform + sr variants
+        raw = _dict_get(item, "array", "audio", "waveform", "raw")
+        sr = _dict_get(item, "sr", "rate", "sampling_rate")
+        if raw is not None and sr is not None:
+            # ensure correct dtype/shape
+            if isinstance(raw, _t.Tensor):
+                raw = raw.detach().cpu().numpy()
+            raw = _np.asarray(raw)
+            if raw.ndim == 2:
+                raw = raw.mean(axis=1).astype(_np.float32, copy=False)
+            elif raw.dtype != _np.float32:
+                raw = raw.astype(_np.float32, copy=False)
+            return {"raw": raw, "sampling_rate": int(sr)}
+
+    # Raw arrays/tensors (needs a sampling rate)
+    if isinstance(item, _t.Tensor):
+        if default_sr is None:
+            raise ValueError("Tensor provided without sampling_rate; set default_sr.")
+        return {"raw": item.detach().cpu().numpy().astype(_np.float32, copy=False), "sampling_rate": int(default_sr)}
+
+    if isinstance(item, _np.ndarray):
+        if default_sr is None:
+            raise ValueError("ndarray provided without sampling_rate; set default_sr.")
+        raw = item
+        if raw.ndim == 2:
+            raw = raw.mean(axis=1)
+        if raw.dtype != _np.float32:
+            raw = raw.astype(_np.float32, copy=False)
+        return {"raw": raw, "sampling_rate": int(default_sr)}
+
+    raise TypeError(f"Unsupported ASR input type: {type(item)!r}")
+
+def _infer_default_sr(model) -> int | None:
+    # Try to get the model’s preferred sampling rate (if available)
+    for attr in ("feature_extractor", "processor"):
+        obj = getattr(model, attr, None)
+        if obj is not None:
+            sr = getattr(obj, "sampling_rate", None)
+            if isinstance(sr, int):
+                return sr
+    return None
 
 def build_hf_asr_kwargs(model, batch_len: int, language: str | None = "th") -> Dict[str, Any]:
     """
@@ -52,7 +138,6 @@ def build_hf_asr_kwargs(model, batch_len: int, language: str | None = "th") -> D
         pass
     return ck
 
-
 async def safe_asr_call(model, batched: List[dict], call_kwargs: Dict[str, Any]):
     """
     Robustly call the HF ASR pipeline:
@@ -73,10 +158,12 @@ async def safe_asr_call(model, batched: List[dict], call_kwargs: Dict[str, Any])
             return await asyncio.to_thread(model, batched, **call_kwargs)
         raise
 
-
-async def asr_with_policy_ladder(model, batched: List[dict], base_kwargs: Dict[str, Any]) -> List[dict]:
+async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[str, Any]) -> List[dict]:
     """Run the ASR pipeline using a VRAM-friendly policy ladder with fallbacks."""
-    import torch as _t
+    # Normalize inputs to {"raw": np/torch, "sampling_rate": int}
+    default_sr = _infer_default_sr(model)
+    batched = [_coerce_one_to_hf(x, default_sr) for x in batched]
+
     # 0) Standard
     try:
         kw = _merge_kwargs(base_kwargs, POLICIES["standard"])
@@ -111,4 +198,3 @@ async def asr_with_policy_ladder(model, batched: List[dict], base_kwargs: Dict[s
             out_i = await safe_asr_call(model, [item], safer)
             results.extend(out_i if isinstance(out_i, list) else [out_i])
     return results
-
