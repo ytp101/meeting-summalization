@@ -22,3 +22,4 @@ app = FastAPI(title="Whisper Speech-to-Text Service")
 app.include_router(root.router)
 app.include_router(healthcheck.router)
 app.include_router(whisper.router)
+
