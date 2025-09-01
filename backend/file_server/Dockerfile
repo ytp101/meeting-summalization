@@ -40,6 +40,6 @@ USER app
 EXPOSE 8010
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl --fail http://localhost:8010/healthcheck || exit 1
+  CMD curl --fail http://localhost:8010/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8010"]

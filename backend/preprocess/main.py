@@ -1,6 +1,6 @@
 """
 Module: preprocess/main.py 
-Service: Converts input media files to normalized 16bit mono WAV format using FFmpeg. 
+Service: Converts input media files to 48 kHz mono Opus format using FFmpeg.
          Intended as a preprocessing step before Diarization and ASR (e.g., Whisper)
 Author: yodsran
 """

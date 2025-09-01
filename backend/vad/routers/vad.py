@@ -35,9 +35,17 @@ from vad.services.vad_service import run_vad_on_file
 
 router = APIRouter()
 
+def _ensure_under_base(p: Path, base: Path = Path("/data")) -> None:
+    try:
+        rp = p.resolve(); basep = base.resolve()
+        rp.relative_to(basep)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Path must be under {base}")
+
 @router.post("/vad", tags=["inference"])
 async def vad_segments(req: VADRequest):
     path = Path(req.input_path)
+    _ensure_under_base(path)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Audio file not found")
 

@@ -48,7 +48,7 @@ def mock_run_preprocess(monkeypatch):
 
 def test_preprocess_success():
     """
-    Posting a valid input should return 200 and produce a .wav via our fake service.
+    Posting a valid input should return 200 and produce a .opus via our fake service.
     """
     resp = client.post(
         "/preprocess/",
@@ -58,8 +58,8 @@ def test_preprocess_success():
 
     data = resp.json()
     assert isinstance(data, list)
-    out_path = Path(data[0]["preprocessed_file_path"])
-    assert out_path.exists() and out_path.suffix == ".wav"
+    out_path = Path(data[0]["preprocessed_file_path"]) 
+    assert out_path.exists() and out_path.suffix == ".opus"
 
 def test_preprocess_file_not_found():
     """

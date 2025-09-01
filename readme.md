@@ -7,7 +7,7 @@
 ## 🧩 Features
 
 - Accepts `.mp4` or `.mp3` input files
-- Extracts audio and converts it to `.wav` using FFmpeg
+- Extracts audio and converts it to `.opus` using FFmpeg
 - Transcribes using `Whisper` (supports Thai and multilingual)
 - Summarizes transcripts using an LLM
 - FastAPI microservice architecture
@@ -56,15 +56,15 @@ npm run dev
 | Endpoint      | Method        | Description                           |
 | ------------- | ------------- | ------------------------------------- |
 | /uploadfile/     | POST          | Upload a .mp4 file and proces       |
-| /preprocess/  | POST          | Convert .mp4 to .wav audio             |
-| /whisper/     | POST          | Transcribe .wav to .txt      |
+| /preprocess/  | POST          | Convert media to .opus audio           |
+| /whisper/     | POST          | Transcribe .opus to .txt               |
 | /summarize/   | POST          | 	Summarize transcription text |
 | /healthcheck/ | GET | 	Health status for each service |
 
 ## 🗃 Storage
 * Persistent Docker volumes are used to store:
     * Uploaded videos (mp4/)
-    * Extracted audio (wav/)
+* Extracted audio (converted/ as .opus)
     * Transcriptions and summaries (txt/)
 
 📄 License

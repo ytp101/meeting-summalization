@@ -3,7 +3,7 @@ File Path Utilities
 -------------------
 
 This module contains utility functions for locating and generating paths
-for meeting-related files, such as source audio, converted `.wav`, transcripts, and summaries.
+for meeting-related files, such as source audio, converted `.opus`, transcripts, and summaries.
 
 The structure assumes a base `DATA_ROOT` like:
 
@@ -12,7 +12,7 @@ The structure assumes a base `DATA_ROOT` like:
            ├── raw/
            │     └── original_file.mp3
            ├── converted/
-           │     └── original_file.wav
+           │     └── original_file.opus
            ├── transcript/
            │     └── original_file.txt
            └── summary/
@@ -89,7 +89,7 @@ def generate_paths(work_id: str) -> dict:
             # Router will do path.exists() → False → 404 (as intended).
             placeholder_name = {
                 "source": ".missing_source",
-                "opus": ".missing_audio.wav",
+                "opus": ".missing_audio.opus",
                 "transcript": ".missing_transcript.txt",
                 "summary": ".missing_summary.txt",
             }.get(category, ".missing")

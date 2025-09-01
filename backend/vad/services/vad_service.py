@@ -32,7 +32,7 @@ async def load_vad_model():
         RuntimeError: If HF_TOKEN is invalid or model fails to load.
     """
     global vad_pipeline
-    hf_token = get_hf_token
+    hf_token = get_hf_token()
     vad_pipeline = await asyncio.to_thread(
         PyannotePipeline.from_pretrained,
         "pyannote/voice-activity-detection",

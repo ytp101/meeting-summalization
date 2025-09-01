@@ -6,7 +6,7 @@ This FastAPI microservice provides secure file access for audio, transcript, and
 
 ## 🚀 Features
 
-- 🔍 Download original audio files, `.wav`, transcript `.txt`, and generated summaries
+- 🔍 Download original audio files, `.opus`, transcript `.txt`, and generated summaries
 - ✅ Healthcheck and root endpoints for monitoring and uptime verification
 - 📦 Modular architecture with clean routing and utilities
 - 🧪 Fully tested with `pytest` and `httpx`
@@ -20,7 +20,7 @@ This FastAPI microservice provides secure file access for audio, transcript, and
 ├── routers/
   ├── root.py # Root '/' liveness endpoint
   ├── healthcheck.py # '/health' healthcheck
-  └── dowload.py # Dowload File endpoint
+  └── download.py # Download File endpoint
 ```
 
 ---

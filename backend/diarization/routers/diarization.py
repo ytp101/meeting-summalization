@@ -18,6 +18,13 @@ from diarization.models.diarization_response import Segment, DiarizationResponse
 
 router = APIRouter()
 
+def _ensure_under_base(p: Path, base: Path = Path("/data")) -> None:
+    try:
+        rp = p.resolve(); basep = base.resolve()
+        rp.relative_to(basep)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Path must be under {base}")
+
 @router.post(
     "/diarization/",
     response_model=DiarizationResponse,
@@ -30,6 +37,7 @@ async def diarize(request: DiarizationRequest):
     """
 
     audio_path = Path(request.audio_path)
+    _ensure_under_base(audio_path)
 
     if not audio_path.is_file():
         logger.warning(f"Audio file not found: {audio_path}")

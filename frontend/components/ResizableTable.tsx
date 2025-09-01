@@ -52,9 +52,10 @@ export default function ResizableTable({ data }: Props) {
     header: 'Source',
     cell: ({ row }) => {
       const workId = row.original.work_id
+      const base = process.env.NEXT_PUBLIC_FILESERVER_URL || 'http://localhost:8010'
       return (
         <a
-          href={`http://localhost:8010/download/${workId}/source`}
+          href={`${base}/download/${workId}/source`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 underline"
@@ -69,9 +70,10 @@ export default function ResizableTable({ data }: Props) {
     header: 'OPUS',
     cell: ({ row }) => {
       const workId = row.original.work_id
+      const base = process.env.NEXT_PUBLIC_FILESERVER_URL || 'http://localhost:8010'
       return (
         <a
-          href={`http://localhost:8010/download/${workId}/opus`}
+          href={`${base}/download/${workId}/opus`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 underline"
@@ -86,9 +88,10 @@ export default function ResizableTable({ data }: Props) {
     header: 'Transcript',
     cell: ({ row }) => {
       const workId = row.original.work_id
+      const base = process.env.NEXT_PUBLIC_FILESERVER_URL || 'http://localhost:8010'
       return (
         <a
-          href={`http://localhost:8010/download/${workId}/transcript`}
+          href={`${base}/download/${workId}/transcript`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 underline"
@@ -103,9 +106,10 @@ export default function ResizableTable({ data }: Props) {
     header: 'Summary',
     cell: ({ row }) => {
       const workId = row.original.work_id
+      const base = process.env.NEXT_PUBLIC_FILESERVER_URL || 'http://localhost:8010'
       return (
         <a
-          href={`http://localhost:8010/download/${workId}/summary`}
+          href={`${base}/download/${workId}/summary`}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-500 underline"

@@ -233,8 +233,8 @@ services:
     networks:
       - meeting_summarization_network
     healthcheck:
-      # hit your FastAPI healthcheck, not /health
-      test: ["CMD-SHELL", "curl --fail http://localhost:80010/healthcheck || exit 1"]
+      # use the service health endpoint
+      test: ["CMD-SHELL", "curl --fail http://localhost:8010/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5

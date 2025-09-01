@@ -4,7 +4,7 @@ Main Application Entry Point.
 Initializes the FastAPI app and includes all service routers:
 - /             → Service status and metadata
 - /healthcheck  → Model and GPU readiness probe
-- /whisper      → Transcription endpoint for WAV files
+- /whisper      → Transcription endpoint for audio files
 
 Routers:
 - root        : Basic service status

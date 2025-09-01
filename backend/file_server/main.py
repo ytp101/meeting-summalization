@@ -13,11 +13,11 @@ Author: yodsran
 """
 
 from fastapi import FastAPI
-from routers import dowload, root, healthcheck
+from routers import download, root, healthcheck
 
 app = FastAPI(title="Meeting Summary File Server")
 
 # Register routers in order of importance
 app.include_router(root.router)
 app.include_router(healthcheck.router)
-app.include_router(dowload.router)
+app.include_router(download.router)
