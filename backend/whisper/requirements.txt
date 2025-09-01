@@ -5,3 +5,4 @@ torch
 torchaudio
 requests
 tqdm
+soundfile

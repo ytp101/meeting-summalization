@@ -144,6 +144,7 @@ async def safe_asr_call(model, batched: List[dict], call_kwargs: Dict[str, Any])
       • If TypeError mentions an unexpected kwarg, drop it and retry.
       • Fallback 'return_timestamps'='word' -> True on older versions.
     """
+    
     try:
         return await asyncio.to_thread(model, batched, **call_kwargs)
     except TypeError as e:
