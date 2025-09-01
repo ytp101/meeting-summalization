@@ -19,7 +19,8 @@ export default function ModalUpload() {
 
     startTransition(async () => {
       try {
-        const res = await fetch('http://localhost:8000/uploadfile/', {
+        const base = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:8000'
+        const res = await fetch(`${base}/uploadfile/`, {
           method: 'POST',
           body: formData,
         })

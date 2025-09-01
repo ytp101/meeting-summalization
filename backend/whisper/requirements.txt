@@ -4,3 +4,5 @@ transformers
 torch
 torchaudio
 requests
+tqdm
+soundfile

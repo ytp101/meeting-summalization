@@ -1,6 +1,6 @@
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
-import asyncio, inspect
+from typing import List, Optional, Tuple
+import asyncio
 import torchaudio
 import torch
 
@@ -13,129 +13,9 @@ from whisper.config.settings import LANGUAGE, PAD_S, MIN_LEN_S, TARGET_SR
 from whisper.utils.same_speaker import merge_turns_by_speaker
 from whisper.utils.fix_missing_end import _fix_missing_ends
 
-
-# ——— Audio helpers ———————————————————————————————————————————————
-
-def best_mono(chunk: torch.Tensor) -> torch.Tensor:
-    """
-    Pick the cleanest single channel by mean-abs amplitude proxy.
-    Input: (C, T) or (T,)
-    Output: (T,)
-    """
-    if chunk.ndim == 1:
-        return chunk.contiguous()
-    if chunk.shape[0] == 1:
-        return chunk.squeeze(0).contiguous()
-    ch_energy = chunk.abs().mean(dim=1)  # (C,)
-    best_idx = int(torch.argmax(ch_energy).item())
-    return chunk[best_idx].contiguous()
-
-
-def normalize_peak(x: torch.Tensor, peak_target: float = 0.95) -> torch.Tensor:
-    peak = x.abs().max()
-    if peak > 0:
-        x = (x / peak) * peak_target
-    return x.contiguous()
-
-
-# ——— HF pipeline call helpers (version-safe) —————————————————————
-
-def build_hf_asr_kwargs(model, batch_len: int, language: Optional[str] = "th") -> Dict[str, Any]:
-    """
-    Build kwargs for transformers.AutomaticSpeechRecognitionPipeline with feature-gating
-    for args that may not exist in older versions.
-    """
-    ck: Dict[str, Any] = {
-        "return_timestamps": "word",            # falls back to True if unsupported
-        "chunk_length_s": 20,                   # 15–30 works well
-        "stride_length_s": (5.0, 5.0),
-        "batch_size": max(1, min(8, batch_len)),
-        "generate_kwargs": {
-            "language": str(language) if language else None,  # None => auto-detect
-            "task": "transcribe",
-            "temperature": 0.0,
-        },
-    }
-    # Feature-gate optional arg
-    try:
-        sig = inspect.signature(model.__call__)
-        if "condition_on_prev_text" in sig.parameters:
-            ck["condition_on_prev_text"] = False
-    except Exception:
-        pass
-    return ck
-
-
-async def safe_asr_call(model, batched: List[dict], call_kwargs: Dict[str, Any]):
-    """
-    Robustly call the HF ASR pipeline:
-      • If TypeError mentions an unexpected kwarg, drop it and retry.
-      • Fallback 'return_timestamps'='word' -> True on older versions.
-    """
-    try:
-        return await asyncio.to_thread(model, batched, **call_kwargs)
-    except TypeError as e:
-        msg = str(e)
-        if "condition_on_prev_text" in msg:
-            call_kwargs = dict(call_kwargs)
-            call_kwargs.pop("condition_on_prev_text", None)
-            return await asyncio.to_thread(model, batched, **call_kwargs)
-        if "return_timestamps" in msg and call_kwargs.get("return_timestamps") == "word":
-            call_kwargs = dict(call_kwargs)
-            call_kwargs["return_timestamps"] = True
-            return await asyncio.to_thread(model, batched, **call_kwargs)
-        raise
-
-
-# ——— Memory policy ladder (keeps model, trades throughput) ———————————
-
-POLICIES: Dict[str, Dict[str, Any]] = {
-    "standard": {"batch_size": 2, "chunk_length_s": 20, "stride_length_s": (5.0, 5.0)},
-    "tight":    {"batch_size": 1, "chunk_length_s": 10, "stride_length_s": (2.0, 2.0)},
-    "ultra":    {"batch_size": 1, "chunk_length_s": 6,  "stride_length_s": (1.5, 1.5), "return_timestamps": True},
-}
-
-def _merge_kwargs(base: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
-    out = dict(base)
-    out.update(overrides)
-    return out
-
-async def _asr_with_policy_ladder(model, batched: List[dict], base_kwargs: Dict[str, Any]) -> List[dict]:
-    import torch as _t
-    # 0) Standard
-    try:
-        kw = _merge_kwargs(base_kwargs, POLICIES["standard"])
-        outs = await safe_asr_call(model, batched, kw)
-        return outs if isinstance(outs, list) else [outs]
-    except _t.cuda.OutOfMemoryError:
-        _t.cuda.empty_cache()
-    # 1) Tight
-    try:
-        kw = _merge_kwargs(base_kwargs, POLICIES["tight"])
-        outs = await safe_asr_call(model, batched, kw)
-        return outs if isinstance(outs, list) else [outs]
-    except _t.cuda.OutOfMemoryError:
-        _t.cuda.empty_cache()
-    # 2) Ultra
-    try:
-        kw = _merge_kwargs(base_kwargs, POLICIES["ultra"])
-        outs = await safe_asr_call(model, batched, kw)
-        return outs if isinstance(outs, list) else [outs]
-    except _t.cuda.OutOfMemoryError:
-        _t.cuda.empty_cache()
-    # 3) Sequentialized ultra (last resort)
-    results: List[dict] = []
-    kw = _merge_kwargs(base_kwargs, POLICIES["ultra"])
-    for item in batched:
-        try:
-            out_i = await safe_asr_call(model, [item], kw)
-            results.extend(out_i if isinstance(out_i, list) else [out_i])
-        except _t.cuda.OutOfMemoryError:
-            _t.cuda.empty_cache()
-            safer = dict(kw, chunk_length_s=5, stride_length_s=(1.0, 1.0))
-            out_i = await safe_asr_call(model, [item], safer)
-            results.extend(out_i if isinstance(out_i, list) else [out_i])
-    return results
+from .audio import best_mono, normalize_peak
+from .asr import build_hf_asr_kwargs, asr_with_policy_ladder
+from .progress import tqdm as _tqdm
 
 
 # ——— Main ASR ————————————————————————————————————————————————
@@ -177,7 +57,7 @@ async def transcribe(
     batched: List[dict] = []
     meta: List[Tuple[DiarSegment, float, float]] = []
 
-    for segment in diar_segments:
+    for segment in _tqdm(diar_segments, desc="Prep segments", unit="seg"):
         # pad & clamp to avoid mid-phoneme cuts
         t0 = max(0.0, float(segment.start) - float(PAD_S))
         t1 = min(float(segment.end) + float(PAD_S), total_dur)
@@ -205,7 +85,8 @@ async def transcribe(
 
         # numpy float32 buffer
         audio_np = audio_mono.cpu().numpy().astype("float32")
-        batched.append({"array": audio_np, "sampling_rate": sample_rate})
+        # HF ASR pipeline expects dict inputs as {"raw": np.ndarray, "sampling_rate": int}
+        batched.append({"raw": audio_np, "sampling_rate": sample_rate})
         meta.append((segment, t0, t1))
 
     if not batched:
@@ -215,7 +96,7 @@ async def transcribe(
     call_kwargs = build_hf_asr_kwargs(
         model, batch_len=len(batched), language=str(LANGUAGE) if LANGUAGE else None
     )
-    outs = await _asr_with_policy_ladder(model, batched, call_kwargs)
+    outs = await asr_with_policy_ladder(model, batched, call_kwargs)
     if not isinstance(outs, list):
         outs = [outs]
 

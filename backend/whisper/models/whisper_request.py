@@ -29,6 +29,6 @@ class DiarSegment(BaseModel):
     speaker: Optional[str] = None
 
 class TranscribeRequest(BaseModel):
-    filename: str                           # WAV filename (without extension)
+    filename: str                           # Absolute path to input audio (e.g., .opus/.wav)
     output_dir: str
     segments: Optional[List[DiarSegment]] = None  # Precomputed diarization segments

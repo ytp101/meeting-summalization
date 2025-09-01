@@ -7,7 +7,7 @@ It manages the full audio processing pipeline, coordinating with downstream micr
 1. **File Validation**: Ensures uploaded file has an allowed extension (`.mp3`, `.mp4`, `.m4a`, `.wav`).
 2. **Task Initialization**: Generates a unique task ID and creates directories for raw, converted, transcript, and summary files.
 3. **File Storage**: Saves the raw upload to the designated data directory.
-4. **Preprocessing**: Converts the raw audio to WAV format via the Preprocess service.
+4. **Preprocessing**: Converts the raw audio to Opus (.opus) via the Preprocess service.
 5. **Speaker Diarization**: Splits audio into speaker segments via the Diarization service.
 6. **Transcription**: Performs ASR using the Whisper service and writes transcripts to disk.
 7. **Summarization**: Summarizes the transcript via the Summarization service.

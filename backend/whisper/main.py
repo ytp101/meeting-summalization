@@ -4,7 +4,7 @@ Main Application Entry Point.
 Initializes the FastAPI app and includes all service routers:
 - /             → Service status and metadata
 - /healthcheck  → Model and GPU readiness probe
-- /whisper      → Transcription endpoint for WAV files
+- /whisper      → Transcription endpoint for audio files
 
 Routers:
 - root        : Basic service status
@@ -22,3 +22,4 @@ app = FastAPI(title="Whisper Speech-to-Text Service")
 app.include_router(root.router)
 app.include_router(healthcheck.router)
 app.include_router(whisper.router)
+

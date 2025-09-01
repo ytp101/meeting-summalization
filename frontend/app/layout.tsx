@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Meeting Summrization Demo",
-  description: "This is the demo of meeting summrization system",
+  title: "Meeting Summarization Demo",
+  description: "This is the demo of meeting summarization system",
   icons: {
     icon: '/favicon.svg',
   }

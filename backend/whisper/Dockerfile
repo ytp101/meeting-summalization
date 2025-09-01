@@ -77,7 +77,7 @@ EXPOSE 8003
 
 # Healthcheck for orchestration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl --fail http://localhost:8003/health || exit 1
+    CMD curl --fail http://localhost:8003/healthcheck || exit 1
 
 # Entrypoint: launch Uvicorn server
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "whisper.main:app", "--host", "0.0.0.0", "--port", "8003"]

@@ -7,9 +7,10 @@ from pathlib import Path
 import tempfile
 
 @pytest.mark.asyncio
-@patch("summarization.routers.summarize.call_ollama", new_callable=AsyncMock)
-async def test_summarize_endpoint(mock_call_ollama):
-    mock_call_ollama.return_value = "This is a mock summary."
+@patch("summarization.services.ollama_client.OllamaChat.chat", new_callable=AsyncMock)
+async def test_summarize_endpoint(mock_chat):
+    # Both pass-1 and pass-2 will return this same string, exercising text fallback path
+    mock_chat.return_value = "This is a mock summary."
 
     with tempfile.TemporaryDirectory() as tmpdir:
         input_path = Path(tmpdir) / "test_transcript.txt"

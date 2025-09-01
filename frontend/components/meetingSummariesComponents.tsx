@@ -22,7 +22,7 @@ export default function MeetingSummaries({ data }: Props) {
   }
 
   return (
-    <div className='h-[85vh overflow-x-auto rounded-md border'>
+    <div className='h-[85vh] overflow-x-auto rounded-md border'>
       <div className="min-w-[1400px]">
         <Table>
           <TableHeader>

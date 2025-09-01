@@ -40,6 +40,14 @@ from summarization.utils.text_renderer import _format_final_text
 
 router = APIRouter()
 
+from pathlib import Path as _Path
+def _ensure_under_base(p: _Path, base: _Path = _Path("/data")) -> None:
+    try:
+        rp = p.resolve(); basep = base.resolve()
+        rp.relative_to(basep)
+    except Exception:
+        raise HTTPException(status_code=400, detail=f"Path must be under {base}")
+
 @router.post(
     "/summarization/",
     summary="Summarize a transcript file (two-pass, Ollama)",
@@ -60,12 +68,14 @@ async def summarize(req: dict):
 
     if "meeting" in req:
         meeting = MeetingDoc(**req["meeting"])
-        output_dir = Path(req["output_dir", "./result"])
+        output_dir = Path(req.get("output_dir", "./result"))
+        _ensure_under_base(output_dir)
     else: 
         # Back-compat: plain text transcript file
         transcript_path = Path(req.get("transcript_path", ""))
-        
+        _ensure_under_base(transcript_path)
         output_dir = Path(req.get("output_dir", "./result"))
+        _ensure_under_base(output_dir)
         if not transcript_path.exists():
             logger.error("Transcript not found: %s", transcript_path)
             raise HTTPException(status_code=404, detail="Transcript file not found")

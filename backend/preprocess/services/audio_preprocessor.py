@@ -3,7 +3,7 @@ Module: services/audio_preprocessor.py
 
 Purpose:
 Provides the core logic for audio preprocessing using FFmpeg. 
-This service converts input media files into normalized 16-bit mono WAV format, 
+This service converts input media files into a 48 kHz mono Opus format (.opus), 
 suitable for downstream tasks such as diarization or automatic speech recognition (ASR).
 
 The function is designed to run asynchronously and handles both processing failures 
@@ -21,18 +21,17 @@ from preprocess.config.settings import FFMPEG_TIMEOUT
 
 async def preprocess(input_file: Path, output_file: Path) -> None:
     """
-    Converts a media file to normalized 16-bit PCM mono WAV format using FFmpeg.
+    Converts a media file to 48 kHz mono Opus format using FFmpeg.
 
     The conversion process:
         - Removes any video stream
-        - Downsamples the audio to 16 kHz
         - Converts audio to mono channel
         - Applies loudness normalization
-        - Outputs as PCM 16-bit `.wav`
+        - Outputs as `.opus` (48 kHz), speech-optimized
 
     Args:
         input_file (Path): Absolute path to the input media file.
-        output_file (Path): Destination path for the output WAV file.
+        output_file (Path): Destination path for the output .opus file.
 
     Raises:
         HTTPException:

@@ -38,9 +38,9 @@ def normalize_utterances(
         if same_speaker and gap_ok and size_ok:
             prev.text = (prev.text.rstrip() + " " + u.text.lstrip()).strip()
             prev.end_ms = u.end_ms if u.end_ms is not None else prev.end_ms
-    # keep prev.start_ms, prev.speaker
-    else:
-        merged.append(u)
+        else:
+            # keep prev.start_ms, prev.speaker
+            merged.append(u)
 
 
     # final cleanup

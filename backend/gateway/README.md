@@ -6,7 +6,7 @@
 
 This service aggregates downstream AI-powered components into a unified, scalable pipeline:
 
-1. **Preprocessing** – Converts raw audio into a canonical format (WAV).
+1. **Preprocessing** – Converts raw audio into a canonical format (Opus .opus).
 2. **Speaker Diarization** – Segments audio by speaker using a dedicated microservice.
 3. **ASR (Whisper)** – Transcribes segmented audio into text.
 4. **Summarization** – Extracts concise meeting summaries and action items.

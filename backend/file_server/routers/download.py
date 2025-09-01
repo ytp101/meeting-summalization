@@ -7,7 +7,7 @@ meeting-related files from a structured directory.
 
 Supported categories:
 - `source`: original uploaded file (e.g., .mp3, .mp4)
-- `wav`: converted .wav audio
+- `opus`: converted .opus audio
 - `transcript`: raw transcript text
 - `summary`: LLM-generated summary
 
