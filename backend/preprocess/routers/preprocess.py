@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pathlib import Path 
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+import httpx
 
 from preprocess.models.preprocess_request import PreprocessRequest
 from preprocess.utils.logger import logger
@@ -69,6 +70,18 @@ async def preprocess(req: PreprocessRequest):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / f"{input_path.stem}.opus"
 
+    # Optional progress hook
+    pmin = float(req.progress_min) if req.progress_min is not None else None
+    pmax = float(req.progress_max) if req.progress_max is not None else None
+    if req.progress_url and req.task_id and pmin is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(req.progress_url, json={
+                    "service": "preprocess", "step": "ffmpeg", "status": "started", "progress": pmin,
+                }, timeout=5.0)
+        except Exception:
+            pass
+
     await run_preprocess(input_path, output_file)
 
     if not output_file.exists():
@@ -76,5 +89,14 @@ async def preprocess(req: PreprocessRequest):
         raise HTTPException(500, "Failed to produce Opus file")
 
     logger.info(f"Produced Opus: {output_file}")
+    if req.progress_url and req.task_id and pmax is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(req.progress_url, json={
+                    "service": "preprocess", "step": "ffmpeg", "status": "completed", "progress": pmax,
+                    "output": str(output_file)
+                }, timeout=5.0)
+        except Exception:
+            pass
     response = [{"preprocessed_file_path": str(output_file)}]
     return JSONResponse(content=jsonable_encoder(response))

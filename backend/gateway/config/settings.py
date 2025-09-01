@@ -70,3 +70,6 @@ DB_URL = (
 MAX_BYTES: int = os.getenv("MAX_BYTES", 10 * 1024**3)  # 10 GB
 CHUNK_SIZE: int = os.getenv("CHUNK_SIZE", 10 * 1024**2)  # 10 MB
 UPLOAD_TIMEOUT: int = os.getenv("UPLOAD_TIMEOUT", 20 * 60) # 20 minutes
+
+# Progress endpoint base (used for microservice hooks)
+PROGRESS_BASE = os.getenv("GATEWAY_PROGRESS_URL", "http://gateway:8000/progress")

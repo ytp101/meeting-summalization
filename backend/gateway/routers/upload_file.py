@@ -30,12 +30,14 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 import time
 from pathlib import Path
 import httpx
+import asyncio
 
 from gateway.utils.utils import generate_task_id, call_service
-from gateway.config.settings import DATA_DIR, PREPROCESS_URL, DIAR_URL, WHISPER_URL, SUMMARIZE_URL
+from gateway.config.settings import DATA_DIR, PREPROCESS_URL, DIAR_URL, WHISPER_URL, SUMMARIZE_URL, PROGRESS_BASE
 from gateway.utils.logger import logger
 from gateway.utils.pg import insert_work_id
 from gateway.services.upload import save_upload_nohash
+from gateway.utils.progress import publish
 
 router = APIRouter()
 
@@ -122,3 +124,101 @@ async def upload_and_process(file: UploadFile = File(...)) -> dict:
     insert_work_id(str(task_id))
 
     return {"task_id": task_id, "summary": summary_text}
+
+
+async def _run_pipeline(task_id: str, raw_path: Path, converted_dir: Path, transcript_dir: Path, summary_dir: Path) -> None:
+    """Background pipeline runner with progress publications."""
+    await publish(task_id, {"service": "gateway", "step": "start", "status": "progress", "progress": 1})
+    try:
+        progress_url = f"{PROGRESS_BASE}/{task_id}"
+        async with httpx.AsyncClient() as client:
+            # Preprocess
+            await publish(task_id, {"service": "preprocess", "step": "preprocess", "status": "started", "progress": 5})
+            pp = await call_service(client, "preprocess", PREPROCESS_URL, {
+                "input_path": str(raw_path),
+                "output_dir": str(converted_dir),
+                "task_id": task_id,
+                "progress_url": progress_url,
+                "progress_min": 5,
+                "progress_max": 25,
+            })
+            wav_file = pp[0]["preprocessed_file_path"]
+            wav_path = Path(wav_file)
+            await publish(task_id, {"service": "preprocess", "step": "preprocess", "status": "completed", "progress": 25, "output": wav_file})
+
+            # Diarization
+            await publish(task_id, {"service": "diarization", "step": "diarization", "status": "started", "progress": 26})
+            diar = await call_service(client, "diarization", DIAR_URL, {
+                "audio_path": str(wav_path),
+                "task_id": task_id,
+                "progress_url": progress_url,
+                "progress_min": 26,
+                "progress_max": 50,
+            })
+            segments = diar.get("segments", [])
+            await publish(task_id, {"service": "diarization", "step": "diarization", "status": "completed", "progress": 50, "segments_count": len(segments)})
+
+            # Whisper
+            await publish(task_id, {"service": "whisper", "step": "transcription", "status": "started", "progress": 51})
+            wr = await call_service(client, "whisper", WHISPER_URL, {
+                "filename": str(wav_path),
+                "output_dir": str(transcript_dir),
+                "segments": segments,
+                "task_id": task_id,
+                "progress_url": progress_url,
+                "progress_min": 51,
+                "progress_max": 80,
+            })
+            transcript_file = wr.get("transcription_file_path")
+            transcript_path = Path(transcript_file)
+            await publish(task_id, {"service": "whisper", "step": "transcription", "status": "completed", "progress": 80, "output": transcript_file})
+
+            # Summarization
+            await publish(task_id, {"service": "summarization", "step": "summarization", "status": "started", "progress": 81})
+            sr = await call_service(client, "summarization", SUMMARIZE_URL, {
+                "transcript_path": str(transcript_path),
+                "output_dir": str(summary_dir),
+                "task_id": task_id,
+                "progress_url": progress_url,
+                "progress_min": 81,
+                "progress_max": 100,
+            })
+            summary_path = Path(sr.get("summary_path"))
+            await publish(task_id, {"service": "summarization", "step": "summarization", "status": "completed", "progress": 100, "output": str(summary_path)})
+
+        # DB & final
+        insert_work_id(str(task_id))
+        await publish(task_id, {"service": "gateway", "step": "done", "status": "completed", "progress": 100, "final": True})
+
+    except Exception as e:
+        logger.error(f"Pipeline error for {task_id}: {e}")
+        await publish(task_id, {"service": "gateway", "step": "error", "status": "error", "message": str(e)})
+
+
+@router.post("/uploadfile/async", response_model=dict)
+async def upload_and_process_async(file: UploadFile = File(...)) -> dict:
+    """Start processing in background and return task_id immediately. Progress via SSE."""
+    allowed_exts = {".mp3", ".mp4", ".m4a", ".wav"}
+    ext = Path(file.filename).suffix.lower()
+    if ext not in allowed_exts:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    task_id = generate_task_id()
+    task_dir = DATA_DIR / task_id
+    raw_dir = task_dir / "raw"
+    converted_dir = task_dir / "converted"
+    transcript_dir = task_dir / "transcript"
+    summary_dir = task_dir / "summary"
+    for d in (raw_dir, converted_dir, transcript_dir, summary_dir):
+        d.mkdir(parents=True, exist_ok=True)
+
+    raw_path = raw_dir / file.filename
+    await publish(task_id, {"service": "gateway", "step": "upload", "status": "started", "progress": 0})
+    status = await save_upload_nohash(file, raw_path)
+    logger.info(f"Saved upload → {raw_path} with {status}")
+    await publish(task_id, {"service": "gateway", "step": "upload", "status": "completed", "progress": 2, "filename": file.filename})
+
+    # Kick off the background pipeline
+    asyncio.create_task(_run_pipeline(task_id, raw_path, converted_dir, transcript_dir, summary_dir))
+
+    return {"task_id": task_id}

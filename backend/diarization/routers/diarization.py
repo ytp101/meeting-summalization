@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pathlib import Path
 import torchaudio
 import asyncio
+import httpx
 
 # ——— Internal imports —————————————————————————————————————
 from diarization.utils.load_model import get_diarization_pipeline
@@ -49,6 +50,18 @@ async def diarize(request: DiarizationRequest):
         logger.error(f"Failed to load audio: {e}")
         raise HTTPException(status_code=500, detail="Could not load audio file")
 
+    pmin = float(request.progress_min) if request.progress_min is not None else None
+    pmax = float(request.progress_max) if request.progress_max is not None else None
+
+    if request.progress_url and request.task_id and pmin is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(request.progress_url, json={
+                    "service": "diarization", "step": "run", "status": "started", "progress": pmin
+                }, timeout=5.0)
+        except Exception:
+            pass
+
     try:
         pipeline = get_diarization_pipeline()
         if pipeline is None:
@@ -71,5 +84,13 @@ async def diarize(request: DiarizationRequest):
         )
         for turn, _, label in annotation.itertracks(yield_label=True)
     ]
-
+    if request.progress_url and request.task_id and pmax is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(request.progress_url, json={
+                    "service": "diarization", "step": "run", "status": "completed", "progress": pmax,
+                    "segments_count": len(segments)
+                }, timeout=5.0)
+        except Exception:
+            pass
     return DiarizationResponse(segments=segments)

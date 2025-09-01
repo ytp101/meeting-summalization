@@ -61,7 +61,14 @@ async def whisper_endpoint(req: TranscribeRequest):
 
     # 1) transcribe -> returns (List[WordSegment], List[str])
     # segments come from diarization step
-    word_segments, lines = await transcribe(audio_path, req.segments)
+    word_segments, lines = await transcribe(
+        audio_path,
+        req.segments,
+        task_id=req.task_id,
+        progress_url=req.progress_url,
+        progress_min=req.progress_min,
+        progress_max=req.progress_max,
+    )
 
     # 2) render human transcript
     await asyncio.to_thread(txt_file.write_text, "\n".join(lines), encoding="utf-8")

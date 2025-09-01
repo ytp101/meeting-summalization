@@ -15,14 +15,19 @@ from whisper.utils.fix_missing_end import _fix_missing_ends
 
 from .audio import best_mono, normalize_peak
 from .asr import build_hf_asr_kwargs, asr_with_policy_ladder
-from .progress import tqdm as _tqdm
+from .progress import tqdm as _tqdm, post_progress as _post_progress, map_progress as _map_progress
 
 
 # ——— Main ASR ————————————————————————————————————————————————
 
 async def transcribe(
     wav_path: Path,
-    segments: Optional[List[DiarSegment]]
+    segments: Optional[List[DiarSegment]],
+    *,
+    task_id: Optional[str] = None,
+    progress_url: Optional[str] = None,
+    progress_min: Optional[float] = None,
+    progress_max: Optional[float] = None,
 ) -> Tuple[List[WordSegment], List[str]]:
     """
     Transcribe diarized (or full) audio using the HF Whisper pipeline.
@@ -50,6 +55,15 @@ async def transcribe(
         diar_segments = [DiarSegment(start=0.0, end=total_dur)]
 
     model = get_whisper_model()
+
+    # Progress bounds
+    pmin = float(progress_min) if progress_min is not None else None
+    pmax = float(progress_max) if progress_max is not None else None
+    if progress_url and pmin is not None:
+        await _post_progress(progress_url, {
+            "service": "whisper", "step": "prep", "status": "started", "progress": pmin,
+            "total_segments": len(segments) if segments else 1,
+        })
 
     flat_word_dicts: List[dict] = []
     word_results: List[WordSegment] = []
@@ -96,7 +110,16 @@ async def transcribe(
     call_kwargs = build_hf_asr_kwargs(
         model, batch_len=len(batched), language=str(LANGUAGE) if LANGUAGE else None
     )
-    outs = await asr_with_policy_ladder(model, batched, call_kwargs)
+    # progress callback for ASR batches
+    async def _cb(done: int, total: int, stage: str):
+        if progress_url and pmin is not None and pmax is not None:
+            prog = _map_progress(done, total, pmin, pmax)
+            await _post_progress(progress_url, {
+                "service": "whisper", "step": f"asr:{stage}", "status": "progress", "progress": prog,
+                "done": done, "total": total,
+            })
+
+    outs = await asr_with_policy_ladder(model, batched, call_kwargs, progress_cb=_cb)
     if not isinstance(outs, list):
         outs = [outs]
 
@@ -144,5 +167,10 @@ async def transcribe(
         f"[{u['start']:.2f}-{u['end']:.2f}] {u['speaker']}: {postprocess_text(u['text'], day_first=True)}"
         for u in turns if u.get("text")
     ]
+
+    if progress_url and pmax is not None:
+        await _post_progress(progress_url, {
+            "service": "whisper", "step": "parse", "status": "completed", "progress": pmax,
+        })
 
     return word_results, lines

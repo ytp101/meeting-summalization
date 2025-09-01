@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from contextlib import asynccontextmanager
 
-from gateway.routers import root, healthcheck, upload_file
+from gateway.routers import root, healthcheck, upload_file, progress
 from gateway.config.settings import ensure_data_dir
 from gateway.utils.logger import logger
 
@@ -59,3 +59,4 @@ app.add_middleware(
 app.include_router(root.router)
 app.include_router(healthcheck.router)
 app.include_router(upload_file.router)
+app.include_router(progress.router)

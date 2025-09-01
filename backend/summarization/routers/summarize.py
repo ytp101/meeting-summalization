@@ -23,6 +23,7 @@ import time
 from pathlib import Path
 import json
 from typing import List 
+import httpx
 
 from summarization.utils.logger import logger
 from summarization.models.two_pass_model import (
@@ -65,6 +66,10 @@ async def summarize(req: dict):
     # 1) Load trancript text 
     meeting: MeetingDoc 
     output_dir: Path 
+    task_id = req.get("task_id")
+    progress_url = req.get("progress_url")
+    pmin = float(req.get("progress_min")) if req.get("progress_min") is not None else None
+    pmax = float(req.get("progress_max")) if req.get("progress_max") is not None else None
 
     if "meeting" in req:
         meeting = MeetingDoc(**req["meeting"])
@@ -106,6 +111,16 @@ async def summarize(req: dict):
         raise HTTPException(status_code=400, detail="Empty transcript after normalization")
     logger.info("Built %d windows for summarization", len(windows))
     logger.info("Windows: %s", windows)
+    # Progress: start
+    if progress_url and pmin is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(progress_url, json={
+                    "service": "summarization", "step": "pass1", "status": "started", "progress": pmin
+                }, timeout=5.0)
+        except Exception:
+            pass
+
     # 3) LLM client (Ollama) 
     c1 = OllamaChat(str(settings.PASS1_BASE_URL), settings.PASS1_MODEL)
     c2 = OllamaChat(str(settings.PASS2_BASE_URL), settings.PASS2_MODEL) 
@@ -128,11 +143,32 @@ async def summarize(req: dict):
             decisions=obj.get("decisions", []) or [],
             action_items=obj.get("action_items", []) or [],
         ))
+        # Progress within pass1
+        if progress_url and pmin is not None and pmax is not None:
+            frac = (idx + 1) / max(1, len(windows))
+            prog = pmin + frac * 0.8 * (pmax - pmin)
+            try:
+                async with httpx.AsyncClient() as client:
+                    await client.post(progress_url, json={
+                        "service": "summarization", "step": "pass1", "status": "progress", "progress": prog,
+                        "done": idx + 1, "total": len(windows)
+                    }, timeout=5.0)
+            except Exception:
+                pass
 
     # 5) Pass-2 reduce 
     jsonl = "".join(json.dumps(cs.model_dump(), ensure_ascii=False) for cs in chunk_objects)
     user2 = prompts.PASS2_USER_TEMPLATE.format(jsonl=jsonl)
     content2 = await c2.chat(prompts.PASS2_SYSTEM, user2, max_tokens=1800)
+    if progress_url and pmin is not None and pmax is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(progress_url, json={
+                    "service": "summarization", "step": "pass2", "status": "progress",
+                    "progress": pmin + 0.9 * (pmax - pmin)
+                }, timeout=5.0)
+        except Exception:
+            pass
     # Expect JSON; if not, treat as text
     try:
         final = json.loads(content2)
@@ -146,6 +182,15 @@ async def summarize(req: dict):
     out_path = output_dir / out_name
     out_path.write_text(final_text, encoding="utf-8")
     await c1.aclose(); await c2.aclose()
+    if progress_url and pmax is not None:
+        try:
+            async with httpx.AsyncClient() as client:
+                await client.post(progress_url, json={
+                    "service": "summarization", "step": "done", "status": "completed",
+                    "progress": pmax
+                }, timeout=5.0)
+        except Exception:
+            pass
     elapsed = time.time() - start
     logger.info(f"Summarization content: {final_text}")
     logger.info("Meeting %s summarized in %.2fs", meeting.meeting_id, elapsed)
