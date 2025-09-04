@@ -71,7 +71,7 @@ async def transcribe(
     batched: List[dict] = []
     meta: List[Tuple[DiarSegment, float, float]] = []
 
-    for segment in _tqdm(diar_segments, desc="Prep segments", unit="seg"):
+    for i, segment in enumerate(_tqdm(diar_segments, desc="Prep segments", unit="seg")):
         # pad & clamp to avoid mid-phoneme cuts
         t0 = max(0.0, float(segment.start) - float(PAD_S))
         t1 = min(float(segment.end) + float(PAD_S), total_dur)
@@ -124,7 +124,7 @@ async def transcribe(
         outs = [outs]
 
     # 5) Parse → per-word segments with global timestamps
-    for (segment, t0, t1), out in zip(meta, outs):
+    for idx, ((segment, t0, t1), out) in enumerate(zip(meta, outs)):
         chunks = out.get("chunks") if isinstance(out, dict) else None
         
         if isinstance(chunks, list):
@@ -157,6 +157,13 @@ async def transcribe(
                     "speaker": segment.speaker or "Speaker",
                     "text": txt,
                 })
+        # parse progress
+        if progress_url and pmin is not None and pmax is not None:
+            prog = _map_progress(idx + 1, len(meta), pmin, pmax)
+            await _post_progress(progress_url, {
+                "service": "whisper", "step": "parse", "status": "progress", "progress": prog,
+                "done": idx + 1, "total": len(meta)
+            })
 
     # 6) Merge words → utterances (speaker-aware), then collapse adjacent same-speaker turns
     utterances = words_to_utterances(flat_word_dicts, joiner="", max_gap_s=0.6)

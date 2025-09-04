@@ -70,33 +70,17 @@ async def preprocess(req: PreprocessRequest):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / f"{input_path.stem}.opus"
 
-    # Optional progress hook
-    pmin = float(req.progress_min) if req.progress_min is not None else None
-    pmax = float(req.progress_max) if req.progress_max is not None else None
-    if req.progress_url and req.task_id and pmin is not None:
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(req.progress_url, json={
-                    "service": "preprocess", "step": "ffmpeg", "status": "started", "progress": pmin,
-                }, timeout=5.0)
-        except Exception:
-            pass
-
-    await run_preprocess(input_path, output_file)
+    # Stream ffmpeg progress from service if hooks provided
+    await run_preprocess(
+        input_path, output_file,
+        progress_url=req.progress_url, pmin=req.progress_min, pmax=req.progress_max
+    )
 
     if not output_file.exists():
         logger.error(f"Opus file not produced: {output_file}")
         raise HTTPException(500, "Failed to produce Opus file")
 
     logger.info(f"Produced Opus: {output_file}")
-    if req.progress_url and req.task_id and pmax is not None:
-        try:
-            async with httpx.AsyncClient() as client:
-                await client.post(req.progress_url, json={
-                    "service": "preprocess", "step": "ffmpeg", "status": "completed", "progress": pmax,
-                    "output": str(output_file)
-                }, timeout=5.0)
-        except Exception:
-            pass
+    # Completed event already posted by service when hooks are provided
     response = [{"preprocessed_file_path": str(output_file)}]
     return JSONResponse(content=jsonable_encoder(response))
