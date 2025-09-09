@@ -19,10 +19,12 @@ services:
   # Fix file permissions on shared_data before any app writes to it
   init-perms:
     image: busybox
-    command: ["sh", "-c", "chown -R 1000:1000 /data || true"]
+    command: ["sh", "-c", "chown -R 1000:1000 /data /whisper_cache /diarization_cache || true"]
     user: "0"
     volumes:
       - shared_data:/data
+      - whisper_cache:/whisper_cache
+      - diarization_cache:/diarization_cache
     restart: "no"
     networks:
       - meeting_summarization_network
@@ -32,102 +34,24 @@ services:
     image: ollama/ollama:latest
     container_name: ollama
     restart: unless-stopped
-    ports:
-      - "11434:11434"
+    ports: ["11434:11434"]        # remove if not needed on host
+    env_file: [.env]
     environment:
-      # Set to "all" to expose GPUs; keep skip tests false for correctness
-      NVIDIA_VISIBLE_DEVICES: all
-      OLLAMA_SKIP_GPU_TESTS: "false"
       TZ: ${TZ:-Asia/Bangkok}
+      NVIDIA_VISIBLE_DEVICES: all
+      OLLAMA_SKIP_GPU_TESTS: "false"  # set "true" if GPU init is flaky
     volumes:
       - ollama_data:/root/.ollama
+      - ./ollama-entrypoint.sh:/entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]   # POSIX sh
     healthcheck:
-      # Use HTTP probe; it's more reliable than `ollama ps` during warm-up
-      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/api/tags >/dev/null"]
+      test: ["CMD", "ollama", "ps"]             # no curl/shell
       interval: 10s
       timeout: 5s
       retries: 20
-      start_period: 10s
-    networks:
-      - meeting_summarization_network
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
-  # One-shot job to pre-pull models into the shared ollama_data volume
-  model-init:
-    image: curlimages/curl:8.10.1
-    restart: "no"
-    env_file: [.env]
-    environment:
-      # Prefer a single list var (space separated). You can still keep PASS1_MODEL/PASS2_MODEL in .env;
-      # both forms are supported below.
-      OLLAMA_HOST: "http://ollama:11434"
-      MODEL_LIST: "${MODEL_LIST:-${PASS1_MODEL:-} ${PASS2_MODEL:-}}"
-    depends_on:
-      init-perms:
-        condition: service_completed_successfully
-      ollama:
-        condition: service_healthy
-    volumes:
-      # mount the same models volume to seed/persist pulls
-      - ollama_data:/root/.ollama
-    entrypoint: ["/bin/sh", "-lc"]
-    command: >
-      '
-      set -eu
-
-      echo "Waiting for Ollama at ${OLLAMA_HOST} ..."
-      until curl -fsS "${OLLAMA_HOST}/api/tags" >/dev/null; do
-        echo "... not ready yet, retrying in 2s"
-        sleep 2
-      done
-
-      # helper: check if a model exists (fast)
-      exists() {
-        curl -fsS -X POST "${OLLAMA_HOST}/api/show" \
-          -H "Content-Type: application/json" \
-          -d "{\"name\":\"$1\"}" >/dev/null
-      }
-
-      # Normalize whitespace
-      MODELS=$(echo "${MODEL_LIST:-}" | xargs)
-      if [ -z "${MODELS}" ]; then
-        echo "No MODEL_LIST / PASS1_MODEL / PASS2_MODEL provided; skipping pulls."
-        exit 0
-      fi
-
-      echo "Pre-warm models: ${MODELS}"
-      for m in ${MODELS}; do
-        if exists "${m}"; then
-          echo "✔ ${m} already present; skipping."
-          continue
-        fi
-
-        echo "Pulling ${m} ..."
-        # Exponential backoff up to 5 attempts
-        i=0; max=5; sleep_s=2
-        until curl -fsS -X POST "${OLLAMA_HOST}/api/pull" \
-                 -H "Content-Type: application/json" \
-                 -d "{\"name\":\"${m}\",\"stream\":false}" >/dev/null; do
-          i=$((i+1))
-          if [ ${i} -ge ${max} ]; then
-            echo "✖ Failed to pull ${m} after ${i} attempts"
-            exit 6
-          fi
-          echo "…retry ${i}/${max} in ${sleep_s}s"
-          sleep ${sleep_s}
-          sleep_s=$((sleep_s*2))
-        done
-        echo "✔ Pulled ${m}"
-      done
-
-      echo "All requested models are ready."
-      '
+      start_period: 30s
+    gpus: all                                   # Compose-native GPU flag
+    networks: [meeting_summarization_network]
 
   # ───────────── Database ─────────────
   db:
@@ -273,8 +197,8 @@ services:
       PYTHONPATH: /app
     depends_on:
       # Ensure models are present before this API starts serving
-      model-init:
-        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
       db:
         condition: service_healthy
     healthcheck:
@@ -361,17 +285,6 @@ services:
       DB_NAME: ${DB_NAME:-meetingdb}
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
-    depends_on:
-      db:
-        condition: service_healthy
-      preprocess:
-        condition: service_healthy
-      whisper:
-        condition: service_healthy
-      diarization:
-        condition: service_healthy
-      summarization:
-        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://localhost:8000/healthcheck || exit 1"]
       interval: 30s
