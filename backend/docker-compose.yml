@@ -141,6 +141,7 @@ services:
       TZ: ${TZ:-Asia/Bangkok}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/001_init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-meetingdb}"]
       interval: 10s
