@@ -1,13 +1,133 @@
-version: '3.8'
+version: "3.8"
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Shared volumes & network
+# ──────────────────────────────────────────────────────────────────────────────
+volumes:
+  shared_data:
+  whisper_cache:
+  diarization_cache:
+  pgdata:
+  ollama_data:
+
+networks:
+  meeting_summarization_network:
+    driver: bridge
+
+# ──────────────────────────────────────────────────────────────────────────────
 services:
+  # Fix file permissions on shared_data before any app writes to it
   init-perms:
     image: busybox
-    command: ["sh", "-c", "chown -R 1000:1000 /data"]
-    user: "0"  # run as root
+    command: ["sh", "-c", "chown -R 1000:1000 /data || true"]
+    user: "0"
     volumes:
       - shared_data:/data
     restart: "no"
+    networks:
+      - meeting_summarization_network
+
+  # Ollama daemon (GPU-enabled)
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    environment:
+      # Set to "all" to expose GPUs; keep skip tests false for correctness
+      NVIDIA_VISIBLE_DEVICES: all
+      OLLAMA_SKIP_GPU_TESTS: "false"
+      TZ: ${TZ:-Asia/Bangkok}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      # Use HTTP probe; it's more reliable than `ollama ps` during warm-up
+      test: ["CMD-SHELL", "curl -fsS http://localhost:11434/api/tags >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    networks:
+      - meeting_summarization_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # One-shot job to pre-pull models into the shared ollama_data volume
+  model-init:
+    image: curlimages/curl:8.10.1
+    restart: "no"
+    env_file: [.env]
+    environment:
+      # Prefer a single list var (space separated). You can still keep PASS1_MODEL/PASS2_MODEL in .env;
+      # both forms are supported below.
+      OLLAMA_HOST: "http://ollama:11434"
+      MODEL_LIST: "${MODEL_LIST:-${PASS1_MODEL:-} ${PASS2_MODEL:-}}"
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
+      ollama:
+        condition: service_healthy
+    volumes:
+      # mount the same models volume to seed/persist pulls
+      - ollama_data:/root/.ollama
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      '
+      set -eu
+
+      echo "Waiting for Ollama at ${OLLAMA_HOST} ..."
+      until curl -fsS "${OLLAMA_HOST}/api/tags" >/dev/null; do
+        echo "... not ready yet, retrying in 2s"
+        sleep 2
+      done
+
+      # helper: check if a model exists (fast)
+      exists() {
+        curl -fsS -X POST "${OLLAMA_HOST}/api/show" \
+          -H "Content-Type: application/json" \
+          -d "{\"name\":\"$1\"}" >/dev/null
+      }
+
+      # Normalize whitespace
+      MODELS=$(echo "${MODEL_LIST:-}" | xargs)
+      if [ -z "${MODELS}" ]; then
+        echo "No MODEL_LIST / PASS1_MODEL / PASS2_MODEL provided; skipping pulls."
+        exit 0
+      fi
+
+      echo "Pre-warm models: ${MODELS}"
+      for m in ${MODELS}; do
+        if exists "${m}"; then
+          echo "✔ ${m} already present; skipping."
+          continue
+        fi
+
+        echo "Pulling ${m} ..."
+        # Exponential backoff up to 5 attempts
+        i=0; max=5; sleep_s=2
+        until curl -fsS -X POST "${OLLAMA_HOST}/api/pull" \
+                 -H "Content-Type: application/json" \
+                 -d "{\"name\":\"${m}\",\"stream\":false}" >/dev/null; do
+          i=$((i+1))
+          if [ ${i} -ge ${max} ]; then
+            echo "✖ Failed to pull ${m} after ${i} attempts"
+            exit 6
+          fi
+          echo "…retry ${i}/${max} in ${sleep_s}s"
+          sleep ${sleep_s}
+          sleep_s=$((sleep_s*2))
+        done
+        echo "✔ Pulled ${m}"
+      done
+
+      echo "All requested models are ready."
+      '
 
   # ───────────── Database ─────────────
   db:
@@ -22,52 +142,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      # now explicitly targets the real DB name
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-meetingdb}"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      interval: 10s
+      timeout: 5s
+      retries: 10
     ports:
-      - "5432:5432" 
-    networks:
-      - meeting_summarization_network
-
-  # ───────────── Gateway ─────────────
-  gateway:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
-    container_name: gateway
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
-    user: "1000:1000"
-    volumes:
-      - shared_data:/data
-    environment:
-      PREPROCESS_SERVICE_URL: http://preprocess:8001/preprocess/
-      WHISPER_SERVICE_URL:    http://whisper:8003/whisper/
-      DIARIZATION_SERVICE_URL: http://diarization:8004/diarization/
-      SUMMARIZATION_SERVICE_URL: http://summarization:8005/summarization/
-      DB_USER: ${DB_USER:-admin}
-      DB_PASSWORD: ${DB_PASSWORD:-secret}
-      DB_HOST: db
-      DB_PORT: ${DB_PORT:-5432}
-      DB_NAME: ${DB_NAME:-meetingdb}
-      TZ: ${TZ:-Asia/Bangkok}
-      PYTHONPATH: /app
-    depends_on:
-      - db
-      - preprocess
-      - whisper
-      - diarization
-      - summarization
-    healthcheck:
-      # hit your FastAPI healthcheck, not /health
-      test: ["CMD-SHELL", "curl --fail http://localhost:8000/healthcheck || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      - "5432:5432"
     networks:
       - meeting_summarization_network
 
@@ -78,47 +158,24 @@ services:
       dockerfile: Dockerfile
     container_name: preprocess
     restart: unless-stopped
+    user: "1000:1000"
     ports:
       - "8001:8001"
-    user: "1000:1000"
     volumes:
       - shared_data:/data
     environment:
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
     healthcheck:
-      # hit your FastAPI healthcheck, not /health
       test: ["CMD-SHELL", "curl --fail http://localhost:8001/healthcheck || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
     networks:
       - meeting_summarization_network
-
-  # ───────────── VAD ─────────────
-  # vad:
-  #   build:
-  #     context: ./vad
-  #     dockerfile: Dockerfile
-  #   container_name: vad
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8002:8002"
-  #   user: "1000:1000"
-  #   volumes:
-  #     - shared_data:/data
-  #   environment:
-  #     HF_TOKEN: ${HF_TOKEN}
-  #     TZ: ${TZ:-Asia/Bangkok}
-  #     PYTHONPATH: /app
-  #   healthcheck:
-  #     # hit your FastAPI healthcheck, not /health
-  #     test: ["CMD-SHELL", "curl --fail http://localhost:8002/healthcheck || exit 1"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 5
-  #   networks:
-  #     - meeting_summarization_network
 
   # ───────────── Whisper ──────────────
   whisper:
@@ -127,14 +184,14 @@ services:
       dockerfile: Dockerfile
     container_name: whisper
     restart: unless-stopped
+    user: "1000:1000"
     ports:
       - "8003:8003"
-    user: "1000:1000"
     volumes:
       - shared_data:/data
       - whisper_cache:/home/app/.cache
     environment:
-      VAD_URL: http://vad:8002/vad/
+      VAD_URL: http://vad:8002/vad/   # optional; service commented out below
       MODEL_ID: openai/whisper-large-v3-turbo
       LANGUAGE: th
       HF_HOME: /home/app/.cache
@@ -142,6 +199,9 @@ services:
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
       PYTORCH_CUDA_ALLOC_CONF: "expandable_segments:True,max_split_size_mb:256"
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
     deploy:
       resources:
         reservations:
@@ -150,7 +210,6 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      # hit your FastAPI healthcheck, not /health
       test: ["CMD-SHELL", "curl --fail http://localhost:8003/healthcheck || exit 1"]
       interval: 30s
       timeout: 10s
@@ -165,9 +224,9 @@ services:
       dockerfile: Dockerfile
     container_name: diarization
     restart: unless-stopped
+    user: "1000:1000"
     ports:
       - "8004:8004"
-    user: "1000:1000"
     volumes:
       - shared_data:/data
       - diarization_cache:/home/app/.cache
@@ -175,6 +234,9 @@ services:
       HF_TOKEN: ${HF_TOKEN}
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
     deploy:
       resources:
         reservations:
@@ -183,7 +245,6 @@ services:
               count: all
               capabilities: [gpu]
     healthcheck:
-      # hit your FastAPI healthcheck, not /health
       test: ["CMD-SHELL", "curl --fail http://localhost:8004/healthcheck || exit 1"]
       interval: 30s
       timeout: 10s
@@ -198,18 +259,23 @@ services:
       dockerfile: Dockerfile
     container_name: summarization
     restart: unless-stopped
+    user: "1000:1000"
     ports:
       - "8005:8005"
-    user: "1000:1000"
     volumes:
       - shared_data:/data
     environment:
-      MODEL_ID: llama3
       OLLAMA_HOST: http://ollama:11434
+      PASS1_MODEL: ${PASS1_MODEL}
+      PASS2_MODEL: ${PASS2_MODEL}
       TZ: ${TZ:-Asia/Bangkok}
       PYTHONPATH: /app
     depends_on:
-      - ollama
+      # Ensure models are present before this API starts serving
+      model-init:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://localhost:8005/healthcheck || exit 1"]
       interval: 30s
@@ -230,46 +296,85 @@ services:
       - "8010:8010"
     volumes:
       - shared_data:/data
-    networks:
-      - meeting_summarization_network
+    environment:
+      PYTHONPATH: /app
+    depends_on:
+      init-perms:
+        condition: service_completed_successfully
     healthcheck:
-      # use the service health endpoint
       test: ["CMD-SHELL", "curl --fail http://localhost:8010/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
-    environment:
-      PYTHONPATH: /app
-
-  # ───────────── Ollama ──────────────
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    restart: unless-stopped
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    environment:
-      OLLAMA_SKIP_GPU_TESTS: "false"
-      NVIDIA_VISIBLE_DEVICES: all
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     networks:
       - meeting_summarization_network
 
-networks:
-  meeting_summarization_network:
-    driver: bridge
+  # ───────────── VAD (optional) ─────────────
+  # vad:
+  #   build:
+  #     context: ./vad
+  #     dockerfile: Dockerfile
+  #   container_name: vad
+  #   restart: unless-stopped
+  #   user: "1000:1000"
+  #   ports:
+  #     - "8002:8002"
+  #   volumes:
+  #     - shared_data:/data
+  #   environment:
+  #     HF_TOKEN: ${HF_TOKEN}
+  #     TZ: ${TZ:-Asia/Bangkok}
+  #     PYTHONPATH: /app
+  #   depends_on:
+  #     init-perms:
+  #       condition: service_completed_successfully
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "curl --fail http://localhost:8002/healthcheck || exit 1"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #   networks:
+  #     - meeting_summarization_network
 
-volumes:
-  shared_data:
-  whisper_cache:
-  ollama_data:
-  diarization_cache:
-  pgdata:
+  # ───────────── Gateway ─────────────
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: gateway
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - shared_data:/data
+    environment:
+      PREPROCESS_SERVICE_URL: http://preprocess:8001/preprocess/
+      WHISPER_SERVICE_URL:    http://whisper:8003/whisper/
+      DIARIZATION_SERVICE_URL: http://diarization:8004/diarization/
+      SUMMARIZATION_SERVICE_URL: http://summarization:8005/summarization/
+      DB_USER: ${DB_USER:-admin}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      DB_HOST: db
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME:-meetingdb}
+      TZ: ${TZ:-Asia/Bangkok}
+      PYTHONPATH: /app
+    depends_on:
+      db:
+        condition: service_healthy
+      preprocess:
+        condition: service_healthy
+      whisper:
+        condition: service_healthy
+      diarization:
+        condition: service_healthy
+      summarization:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:8000/healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - meeting_summarization_network

@@ -29,24 +29,16 @@ import os
 from pydantic import AnyHttpUrl 
 
 OLLAMA_HOST    = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-MODEL_ID       = os.getenv("MODEL_ID", "llama3")
 SYSTEM_PROMPT  = os.getenv("SYSTEM_PROMPT", "Summarize the following transcript in a concise, structured format.")
 MAX_TOKENS     = int(os.getenv("MAX_TOKENS", 4096))
 TEMPERATURE    = float(os.getenv("TEMPERATURE", 0.2))
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", 300))
 
 # 2 pass .env 
-# llama3.1:8b
-# PASS1_MODEL = "meta-llama/Llama-3.1-8B-Instruct"
-PASS1_MODEL = "llama3.1:8b"
+PASS1_MODEL = str(os.getenv("PASS1_MODEL", "llama3.1:8b"))
 
 # qwen2.5:14b
-# PASS2_MODEL = "Qwen/Qwen2.5-14B-Instruct-AWQ"
-PASS2_MODEL = "qwen2.5:14b-instruct"
-
-# pass 1 and pass 2 base URLs
-PASS1_BASE_URL: AnyHttpUrl = "http://ollama:11434"
-PASS2_BASE_URL: AnyHttpUrl = "http://ollama:11434"
+PASS2_MODEL = str(os.getenv("PASS2_MODEL", "qwen2.5:14b-instruct"))
 
 # Windowing default 
 MAX_WINDOW_CHARS: int = 5000 
