@@ -1,10 +1,17 @@
 from typing import List, Dict, Any, Optional
 
+def _join_with_space(left: str, right: str, separator: str = " ") -> str:
+    if not right:
+        return left or ""
+    if not left:
+        return right
+    return left.rstrip() + separator + right.lstrip()
+
 def merge_turns_by_speaker(
     utterances: List[Dict[str, Any]],
     *,
-    max_gap_s: Optional[float] = 0.6,   # None => ignore gaps (merge all consecutive same-speaker)
-    joiner: str = " "                   # default: space for Latin languages
+    max_gap_s: Optional[float] = 0.6,   # None => merge all consecutive same-speaker turns
+    joiner: str = " "
 ) -> List[Dict[str, Any]]:
     """
     Merge consecutive turns if same speaker and (optionally) the gap is small.
@@ -17,43 +24,45 @@ def merge_turns_by_speaker(
     utterances = sorted(utterances, key=lambda u: float(u["start"]))
 
     merged: List[Dict[str, Any]] = []
-    cur: Optional[Dict[str, Any]] = None
+    prev: Optional[Dict[str, Any]] = None
 
     for u in utterances:
         if not u.get("text"):
             continue
 
-        spk = (u.get("speaker") or "Speaker").strip()
-        s, e = float(u["start"]), float(u["end"])
-        text = (u["text"] or "")
+        speaker = (u.get("speaker") or "Speaker").strip()
+        start, end = float(u["start"]), float(u["end"])
+        text = str(u.get("text") or "")
 
-        if cur is None:
-            cur = {"start": s, "end": e, "speaker": spk, "text": text}
+        if prev is None:
+            prev = {"start": start, "end": end, "speaker": speaker, "text": text}
             if "words" in u:
-                cur["words"] = list(u.get("words") or [])
+                prev["words"] = list(u.get("words") or [])
             continue
 
-        same_speaker = (spk == cur["speaker"])
-        gap = s - float(cur["end"])
+        same_speaker = (speaker == prev["speaker"])
+        gap = start - float(prev["end"])
         small_gap = True if max_gap_s is None else (gap <= max_gap_s)
 
         if same_speaker and small_gap:
-            cur["end"] = max(cur["end"], e)
+            # Merge into prev
+            prev["end"] = max(prev["end"], end)
             if text:
-                # Always add joiner between consecutive fragments
-                cur["text"] = cur["text"] + joiner + text
+                prev["text"] = _join_with_space(prev["text"], text, joiner)
             if "words" in u:
-                cur.setdefault("words", []).extend(u.get("words") or [])
+                prev.setdefault("words", []).extend(u.get("words") or [])
         else:
-            # Clean up before storing
-            cur["text"] = cur["text"].strip()
-            merged.append(cur)
-            cur = {"start": s, "end": e, "speaker": spk, "text": text}
-            if "words" in u:
-                cur["words"] = list(u.get("words") or [])
+            # Flush prev
+            prev["text"] = prev["text"].strip()
+            merged.append(prev)
 
-    if cur:
-        cur["text"] = cur["text"].strip()
-        merged.append(cur)
+            # Start new
+            prev = {"start": start, "end": end, "speaker": speaker, "text": text}
+            if "words" in u:
+                prev["words"] = list(u.get("words") or [])
+
+    if prev:
+        prev["text"] = prev["text"].strip()
+        merged.append(prev)
 
     return merged
