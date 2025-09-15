@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pathlib import Path 
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
+import httpx
 
 from preprocess.models.preprocess_request import PreprocessRequest
 from preprocess.utils.logger import logger
@@ -69,12 +70,17 @@ async def preprocess(req: PreprocessRequest):
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / f"{input_path.stem}.opus"
 
-    await run_preprocess(input_path, output_file)
+    # Stream ffmpeg progress from service if hooks provided
+    await run_preprocess(
+        input_path, output_file,
+        progress_url=req.progress_url, pmin=req.progress_min, pmax=req.progress_max
+    )
 
     if not output_file.exists():
         logger.error(f"Opus file not produced: {output_file}")
         raise HTTPException(500, "Failed to produce Opus file")
 
     logger.info(f"Produced Opus: {output_file}")
+    # Completed event already posted by service when hooks are provided
     response = [{"preprocessed_file_path": str(output_file)}]
     return JSONResponse(content=jsonable_encoder(response))

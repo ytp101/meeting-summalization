@@ -10,6 +10,7 @@ Author: yodsran
 """
 
 from pydantic import BaseModel
+from typing import Optional
 
 class PreprocessRequest(BaseModel):
     """
@@ -23,3 +24,8 @@ class PreprocessRequest(BaseModel):
     """
     input_path: str
     output_dir: str
+    # Optional progress streaming fields (gateway orchestrated)
+    task_id: Optional[str] = None
+    progress_url: Optional[str] = None
+    progress_min: Optional[float] = None
+    progress_max: Optional[float] = None

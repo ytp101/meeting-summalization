@@ -6,6 +6,7 @@ These models are used for validation, documentation, and serialization.
 """
 
 from pydantic import BaseModel, Field
+from typing import Optional
 
 class DiarizationRequest(BaseModel):
     """
@@ -17,3 +18,8 @@ class DiarizationRequest(BaseModel):
                           Must be accessible by the backend.
     """
     audio_path: str = Field(..., example="/path/to/audio.wav", description="Full path to a WAV audio file")
+    # Optional progress streaming fields (gateway orchestrated)
+    task_id: Optional[str] = None
+    progress_url: Optional[str] = None
+    progress_min: Optional[float] = None
+    progress_max: Optional[float] = None

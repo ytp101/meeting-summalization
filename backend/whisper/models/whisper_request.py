@@ -32,3 +32,8 @@ class TranscribeRequest(BaseModel):
     filename: str                           # Absolute path to input audio (e.g., .opus/.wav)
     output_dir: str
     segments: Optional[List[DiarSegment]] = None  # Precomputed diarization segments
+    # Optional progress streaming fields (gateway orchestrated)
+    task_id: Optional[str] = None
+    progress_url: Optional[str] = None
+    progress_min: Optional[float] = None
+    progress_max: Optional[float] = None

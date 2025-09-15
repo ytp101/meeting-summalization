@@ -218,6 +218,47 @@ def _as_arrays_and_sr(payload: List[Dict[str, Any]]) -> Tuple[List[_np.ndarray],
     return arrays, (uniq[0] if len(uniq) == 1 else None)
 
 # -------------------------
+# Progress helpers
+# -------------------------
+async def _call_batched_with_progress(model, payload: List[Dict[str, Any]], call_kwargs: Dict[str, Any], desc: str, progress_cb=None) -> List[dict]:
+    """Call HF pipeline in sub-batches while reporting progress via tqdm."""
+    batch_size = int(max(1, int(call_kwargs.get("batch_size", 1))))
+    results: List[dict] = []
+    total = len(payload)
+    for i in _tqdm(range(0, total), desc=desc, unit="seg"):
+        if i % batch_size != 0:
+            continue
+        sub = payload[i:i + batch_size]
+        outs = await safe_asr_call(model, sub, call_kwargs)
+        results.extend(outs if isinstance(outs, list) else [outs])
+        if progress_cb is not None:
+            done = min(i + len(sub), total)
+            try:
+                await progress_cb(done, total, desc)
+            except Exception:
+                pass
+    return results
+
+async def _call_arrays_with_progress(model, arrays: List[_np.ndarray], call_kwargs: Dict[str, Any], desc: str, progress_cb=None) -> List[dict]:
+    """Call HF pipeline on raw arrays in sub-batches with tqdm progress."""
+    batch_size = int(max(1, int(call_kwargs.get("batch_size", 1))))
+    results: List[dict] = []
+    total = len(arrays)
+    for i in _tqdm(range(0, total), desc=desc, unit="seg"):
+        if i % batch_size != 0:
+            continue
+        sub = arrays[i:i + batch_size]
+        outs = await asyncio.to_thread(model, sub, **call_kwargs)
+        results.extend(outs if isinstance(outs, list) else [outs])
+        if progress_cb is not None:
+            done = min(i + len(sub), total)
+            try:
+                await progress_cb(done, total, desc)
+            except Exception:
+                pass
+    return results
+
+# -------------------------
 # Public API
 # -------------------------
 def build_hf_asr_kwargs(model, batch_len: int, language: str | None = "th") -> Dict[str, Any]:
@@ -244,7 +285,7 @@ def build_hf_asr_kwargs(model, batch_len: int, language: str | None = "th") -> D
         pass
     return ck
 
-async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[str, Any]) -> List[dict]:
+async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[str, Any], progress_cb=None) -> List[dict]:
     """Run the ASR pipeline using a VRAM-friendly policy ladder with fallbacks."""
     # --- Normalize inputs and FREEZE the final payload ---
     default_sr = _infer_default_sr(model)
@@ -262,8 +303,8 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
     # 0) Standard
     try:
         kw = _merge_kwargs(base_kwargs, POLICIES["standard"])
-        outs = await safe_asr_call(model, payload, kw)
-        return outs if isinstance(outs, list) else [outs]
+        outs = await _call_batched_with_progress(model, payload, kw, desc="ASR standard", progress_cb=progress_cb)
+        return outs
     except ValueError as ve:
         # HF dict schema refusal: retry with arrays (+ optional sampling_rate)
         if "AutomaticSpeechRecognitionPipeline" in str(ve) and "raw" in str(ve):
@@ -272,8 +313,8 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
             if sr is not None:
                 kw = dict(kw, sampling_rate=int(sr))
             logger.info("ASR fallback -> arrays + sampling_rate=%s", sr)
-            outs = await asyncio.to_thread(model, arrays, **kw)
-            return outs if isinstance(outs, list) else [outs]
+            outs = await _call_arrays_with_progress(model, arrays, kw, desc="ASR standard (arrays)", progress_cb=progress_cb)
+            return outs
         else:
             raise
     except _t.cuda.OutOfMemoryError:
@@ -282,8 +323,8 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
     # 1) Tight
     try:
         kw = _merge_kwargs(base_kwargs, POLICIES["tight"])
-        outs = await safe_asr_call(model, payload, kw)
-        return outs if isinstance(outs, list) else [outs]
+        outs = await _call_batched_with_progress(model, payload, kw, desc="ASR tight", progress_cb=progress_cb)
+        return outs
     except ValueError as ve:
         if "AutomaticSpeechRecognitionPipeline" in str(ve) and "raw" in str(ve):
             arrays, sr = _as_arrays_and_sr(payload)
@@ -291,8 +332,8 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
             if sr is not None:
                 kw = dict(kw, sampling_rate=int(sr))
             logger.info("ASR fallback (tight) -> arrays + sampling_rate=%s", sr)
-            outs = await asyncio.to_thread(model, arrays, **kw)
-            return outs if isinstance(outs, list) else [outs]
+            outs = await _call_arrays_with_progress(model, arrays, kw, desc="ASR tight (arrays)", progress_cb=progress_cb)
+            return outs
         else:
             raise
     except _t.cuda.OutOfMemoryError:
@@ -301,8 +342,8 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
     # 2) Ultra
     try:
         kw = _merge_kwargs(base_kwargs, POLICIES["ultra"])
-        outs = await safe_asr_call(model, payload, kw)
-        return outs if isinstance(outs, list) else [outs]
+        outs = await _call_batched_with_progress(model, payload, kw, desc="ASR ultra", progress_cb=progress_cb)
+        return outs
     except ValueError as ve:
         if "AutomaticSpeechRecognitionPipeline" in str(ve) and "raw" in str(ve):
             arrays, sr = _as_arrays_and_sr(payload)
@@ -310,8 +351,8 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
             if sr is not None:
                 kw = dict(kw, sampling_rate=int(sr))
             logger.info("ASR fallback (ultra) -> arrays + sampling_rate=%s", sr)
-            outs = await asyncio.to_thread(model, arrays, **kw)
-            return outs if isinstance(outs, list) else [outs]
+            outs = await _call_arrays_with_progress(model, arrays, kw, desc="ASR ultra (arrays)", progress_cb=progress_cb)
+            return outs
         else:
             raise
     except _t.cuda.OutOfMemoryError:
@@ -320,10 +361,16 @@ async def asr_with_policy_ladder(model, batched: List[Any], base_kwargs: Dict[st
     # 3) Sequential ultra (last resort)
     results: List[dict] = []
     kw = _merge_kwargs(base_kwargs, POLICIES["ultra"])
+    total = len(payload)
     for i in _tqdm(range(len(payload)), desc="ASR ultra seq", unit="seg"):
         try:
             out_i = await safe_asr_call(model, [payload[i]], kw)
             results.extend(out_i if isinstance(out_i, list) else [out_i])
+            if progress_cb is not None:
+                try:
+                    await progress_cb(min(i + 1, total), total, "ASR ultra seq")
+                except Exception:
+                    pass
         except ValueError as ve:
             if "AutomaticSpeechRecognitionPipeline" in str(ve) and "raw" in str(ve):
                 arrays, sr = _as_arrays_and_sr([payload[i]])

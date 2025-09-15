@@ -28,6 +28,27 @@ export default function ResizableTable({ data }: Props) {
     accessorKey: 'work_id',
     header: 'Work ID',
   },
+  {
+    id: 'progress',
+    header: 'Progress',
+    cell: ({ row }) => {
+      const m = row.original
+      let steps = 0
+      if (m.source_path) steps += 1
+      if (m.wav_path) steps += 1
+      if (m.transcript_path) steps += 1
+      if (m.summary_path) steps += 1
+      const pct = Math.round((steps / 4) * 100)
+      return (
+        <div className="min-w-[180px]">
+          <div className="w-full h-3 bg-gray-200 rounded">
+            <div className="h-3 bg-green-500 rounded" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="text-xs text-gray-600 mt-1">{pct}%</div>
+        </div>
+      )
+    }
+  },
   // {
   //   accessorKey: 'source_filename',
   //   header: 'Source Filename',

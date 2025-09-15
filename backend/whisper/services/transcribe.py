@@ -12,17 +12,23 @@ from whisper.services.merger import words_to_utterances
 from whisper.config.settings import LANGUAGE, PAD_S, MIN_LEN_S, TARGET_SR
 from whisper.utils.same_speaker import merge_turns_by_speaker
 from whisper.utils.fix_missing_end import _fix_missing_ends
+from whisper.utils.logger import logger
 
 from .audio import best_mono, normalize_peak
 from .asr import build_hf_asr_kwargs, asr_with_policy_ladder
-from .progress import tqdm as _tqdm
+from .progress import tqdm as _tqdm, post_progress as _post_progress, map_progress as _map_progress
 
 
 # ——— Main ASR ————————————————————————————————————————————————
 
 async def transcribe(
     wav_path: Path,
-    segments: Optional[List[DiarSegment]]
+    segments: Optional[List[DiarSegment]],
+    *,
+    task_id: Optional[str] = None,
+    progress_url: Optional[str] = None,
+    progress_min: Optional[float] = None,
+    progress_max: Optional[float] = None,
 ) -> Tuple[List[WordSegment], List[str]]:
     """
     Transcribe diarized (or full) audio using the HF Whisper pipeline.
@@ -51,13 +57,22 @@ async def transcribe(
 
     model = get_whisper_model()
 
+    # Progress bounds
+    pmin = float(progress_min) if progress_min is not None else None
+    pmax = float(progress_max) if progress_max is not None else None
+    if progress_url and pmin is not None:
+        await _post_progress(progress_url, {
+            "service": "whisper", "step": "prep", "status": "started", "progress": pmin,
+            "total_segments": len(segments) if segments else 1,
+        })
+
     flat_word_dicts: List[dict] = []
     word_results: List[WordSegment] = []
 
     batched: List[dict] = []
     meta: List[Tuple[DiarSegment, float, float]] = []
 
-    for segment in _tqdm(diar_segments, desc="Prep segments", unit="seg"):
+    for i, segment in enumerate(_tqdm(diar_segments, desc="Prep segments", unit="seg")):
         # pad & clamp to avoid mid-phoneme cuts
         t0 = max(0.0, float(segment.start) - float(PAD_S))
         t1 = min(float(segment.end) + float(PAD_S), total_dur)
@@ -96,12 +111,21 @@ async def transcribe(
     call_kwargs = build_hf_asr_kwargs(
         model, batch_len=len(batched), language=str(LANGUAGE) if LANGUAGE else None
     )
-    outs = await asr_with_policy_ladder(model, batched, call_kwargs)
+    # progress callback for ASR batches
+    async def _cb(done: int, total: int, stage: str):
+        if progress_url and pmin is not None and pmax is not None:
+            prog = _map_progress(done, total, pmin, pmax)
+            await _post_progress(progress_url, {
+                "service": "whisper", "step": f"asr:{stage}", "status": "progress", "progress": prog,
+                "done": done, "total": total,
+            })
+
+    outs = await asr_with_policy_ladder(model, batched, call_kwargs, progress_cb=_cb)
     if not isinstance(outs, list):
         outs = [outs]
 
     # 5) Parse → per-word segments with global timestamps
-    for (segment, t0, t1), out in zip(meta, outs):
+    for idx, ((segment, t0, t1), out) in enumerate(zip(meta, outs)):
         chunks = out.get("chunks") if isinstance(out, dict) else None
         
         if isinstance(chunks, list):
@@ -134,15 +158,28 @@ async def transcribe(
                     "speaker": segment.speaker or "Speaker",
                     "text": txt,
                 })
+        # parse progress
+        if progress_url and pmin is not None and pmax is not None:
+            prog = _map_progress(idx + 1, len(meta), pmin, pmax)
+            await _post_progress(progress_url, {
+                "service": "whisper", "step": "parse", "status": "progress", "progress": prog,
+                "done": idx + 1, "total": len(meta)
+            })
 
     # 6) Merge words → utterances (speaker-aware), then collapse adjacent same-speaker turns
     utterances = words_to_utterances(flat_word_dicts, joiner="", max_gap_s=0.6)
-    turns = merge_turns_by_speaker(utterances, max_gap_s=0.6, joiner="")
+    logger.info(utterances)
+    turns = merge_turns_by_speaker(utterances, max_gap_s=None, joiner="|")
 
     # 7) Render lines
     lines: List[str] = [
         f"[{u['start']:.2f}-{u['end']:.2f}] {u['speaker']}: {postprocess_text(u['text'], day_first=True)}"
         for u in turns if u.get("text")
     ]
+
+    if progress_url and pmax is not None:
+        await _post_progress(progress_url, {
+            "service": "whisper", "step": "parse", "status": "completed", "progress": pmax,
+        })
 
     return word_results, lines
