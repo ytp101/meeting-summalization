@@ -12,6 +12,7 @@ from whisper.services.merger import words_to_utterances
 from whisper.config.settings import LANGUAGE, PAD_S, MIN_LEN_S, TARGET_SR
 from whisper.utils.same_speaker import merge_turns_by_speaker
 from whisper.utils.fix_missing_end import _fix_missing_ends
+from whisper.utils.logger import logger
 
 from .audio import best_mono, normalize_peak
 from .asr import build_hf_asr_kwargs, asr_with_policy_ladder
@@ -167,7 +168,8 @@ async def transcribe(
 
     # 6) Merge words → utterances (speaker-aware), then collapse adjacent same-speaker turns
     utterances = words_to_utterances(flat_word_dicts, joiner="", max_gap_s=0.6)
-    turns = merge_turns_by_speaker(utterances, max_gap_s=None, joiner=" ")
+    logger.info(utterances)
+    turns = merge_turns_by_speaker(utterances, max_gap_s=None, joiner="|")
 
     # 7) Render lines
     lines: List[str] = [
