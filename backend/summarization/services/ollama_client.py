@@ -15,51 +15,10 @@ Author:
 """
 
 import httpx
-from fastapi import HTTPException
-from summarization.utils.logger import logger
 from summarization.config.settings import (
-    OLLAMA_HOST,
-    MODEL_ID,
-    SYSTEM_PROMPT,
-    MAX_TOKENS,
     TEMPERATURE,
     REQUEST_TIMEOUT
 )
-
-async def call_ollama(transcript: str) -> str:
-    """
-    Call the Ollama LLM model to summarize a transcript.
-
-    Args:
-        transcript (str): Raw transcript text to summarize.
-
-    Returns:
-        str: Model-generated summary text.
-
-    Raises:
-        HTTPException: If the model fails or returns an error response.
-    """
-    payload = {
-        "model": MODEL_ID,
-        "prompt": f"{SYSTEM_PROMPT}\n\n{transcript}",
-        "stream": False,
-        "options": {
-            "num_predict": MAX_TOKENS,
-            "temperature": TEMPERATURE,
-            "context_window": 8192
-        }
-    }
-    url = f"{OLLAMA_HOST}/api/generate"
-
-    async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-        resp = await client.post(url, json=payload)
-
-    if resp.status_code != 200:
-        logger.error("❌ Ollama error %d: %s", resp.status_code, resp.text)
-        raise HTTPException(status_code=500, detail="Ollama API error")
-
-    data = resp.json()
-    return data.get("response") or (data.get("choices") or [{}])[0].get("text", "")
 
 class OllamaChat: 
     def __init__(self, base_url: str, model: str): 

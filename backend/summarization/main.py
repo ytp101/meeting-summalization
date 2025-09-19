@@ -53,5 +53,4 @@ app = FastAPI(
 
 # ─── Route Registration ────────────────────────────────────────────────────────
 app.include_router(root.router)
-app.include_router(healthcheck.router)
 app.include_router(summarize.router)
