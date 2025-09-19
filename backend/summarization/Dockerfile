@@ -65,9 +65,5 @@ USER app
 # Expose service port
 EXPOSE 8005
 
-# Healthcheck for container orchestration
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl --fail http://localhost:8005/healthcheck || exit 1
-
 # Entrypoint: start Uvicorn
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh", "uvicorn", "summarization.main:app", "--host", "0.0.0.0", "--port", "8005"]

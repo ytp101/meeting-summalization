@@ -26,7 +26,6 @@ Author:
 """
 
 import os
-from pydantic import AnyHttpUrl 
 
 OLLAMA_HOST    = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 SYSTEM_PROMPT  = os.getenv("SYSTEM_PROMPT", "Summarize the following transcript in a concise, structured format.")

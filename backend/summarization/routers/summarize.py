@@ -29,7 +29,6 @@ from summarization.utils.logger import logger
 from summarization.models.two_pass_model import (
     MeetingDoc,
     ChunkSummary, 
-    FinalSummary, 
     Utterance
 )
 from summarization.utils.normalizer import normalize_utterances 
