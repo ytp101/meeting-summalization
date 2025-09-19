@@ -19,7 +19,7 @@ Author:
 """
 
 from fastapi import APIRouter
-from summarization.config.settings import MODEL_ID
+from summarization.config.settings import PASS1_MODEL, PASS2_MODEL
 
 router = APIRouter()
 
@@ -31,4 +31,4 @@ def root():
     Returns:
         dict: Contains service status and currently active model ID.
     """
-    return {"status": "summarization running", "model": MODEL_ID}
+    return {"status": "summarization running", "pass1_model": PASS1_MODEL, "pass2_model": PASS2_MODEL}
