@@ -121,8 +121,8 @@ async def summarize(req: dict):
             pass
 
     # 3) LLM client (Ollama) 
-    c1 = OllamaChat(str(settings.OLLAMA_HOST), settings.OLLAMA_HOST)
-    c2 = OllamaChat(str(settings.OLLAMA_HOST), settings.OLLAMA_HOST) 
+    c1 = OllamaChat(str(settings.OLLAMA_HOST), settings.PASS1_MODEL)
+    c2 = OllamaChat(str(settings.OLLAMA_HOST), settings.PASS2_MODEL) 
 
     # 4) Pass-1 over windows 
     chunk_objects: List[ChunkSummary] = []
